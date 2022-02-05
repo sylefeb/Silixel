@@ -1,0 +1,40 @@
+read_verilog ../build/synth.v
+
+# synth -flatten -auto-top -noalumacc -lut 4
+
+techmap -map +/adff2dff.v
+
+hierarchy -check -auto-top
+
+proc
+# async2sync
+flatten
+opt_expr
+opt_clean
+check
+opt -nodffe -nosdff
+fsm
+opt -nodffe -nosdff
+wreduce
+peepopt
+opt_clean
+techmap -map +/cmp2lut.v -D LUT_WIDTH=4
+# alumacc
+share
+opt  -nodffe -nosdff
+memory -nomap
+opt_clean
+
+opt -fast -full -nodffe -nosdff
+memory_map
+opt -full -nodffe -nosdff
+techmap
+opt -fast -nodffe -nosdff
+abc -fast -lut 4
+opt -fast -nodffe -nosdff
+
+hierarchy -check
+stat
+check
+
+write_blif ../build/synth.blif

@@ -1,2 +1,2 @@
-# Silixel
-Gate level simulation made simple
+# silixel
+Exploring GPU simulation of logic

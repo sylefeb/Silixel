@@ -1,0 +1,11 @@
+// @sylefeb 2021-01-09
+#version 430
+
+in  vec4 mvf_vertex;
+out vec2 uv;
+
+void main()
+{
+    uv          = mvf_vertex.xy;
+    gl_Position = vec4(mvf_vertex.xy*2.0-1.0,0.5,1.0);
+}
