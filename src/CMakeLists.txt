@@ -30,9 +30,6 @@ ADD_EXECUTABLE(silixel
 	sh_visu.h
 	simul.cc
 	simul.h
-	outputs_r.sh
-	outputs_w.sh
-	outputs_rw.sh
 	)
 
 TARGET_LINK_LIBRARIES(silixel LibSL LibSL_gl4core)
