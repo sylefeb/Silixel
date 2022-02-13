@@ -1,20 +1,27 @@
 # Silixel
 *Exploring gate-level simulation on CPU and GPU*
 
-This repository contains my experiments on gate-level simulation. By that I mean taking the output of [Yosys](https://github.com/YosysHQ/yosys) and simulating the gate network.
+> **Note:** The purpose of this repo is learning about simulation and having fun hacking and understanding how this is possible at all. For actual simulation please refer to *Verilator*, *CXXRTL* and *Icarus Verilog*.
+
+This repository contains my experiments on gate-level simulation. By that I mean taking the output of [Yosys](https://github.com/YosysHQ/yosys) and simulating the gate network (not taking delays into account - although I believe this could be added).
 
 This all started as I stumbled upon an entry to the Google CTF 2019 contest: [reversing-gpurtl](https://www.youtube.com/watch?v=3ac9HAsfV8c). The source code [is available](https://github.com/google/google-ctf/tree/master/2019/finals/reversing-gpurtl) and shows how to brute force a gate-level simulation onto the GPU.
 
-What does that mean? How does that work? We're going to precisely answer these questions!
+> What does that mean? How does that work? We're going to precisely answer these questions!
 
 By analyzing the `reversing-gpurtl` source code and scripts (which are in Python and Rust), I got a good understanding of how the gate level simulation was achieved. And I was surprised to discover that it is *simple*!
 
 Fundamentally, the idea is as follows:
-1. Ask Yosys to synthesize a design using only LUT4s. A LUT (Lookup Up Table) is a basic building block of an FPGA, a LUT4 schematic looks like that:<center><img src="lut4.png" width="200px"/></center> The LUT4 has 4 inputs (a,b,c,d) and two outputs: D and Q. Output D is 'immediately' updated (as fast as the circuit can do it) when a,b,c or d change. Q is updated with the value of D whenever the clock ticks (positive edge). Given a,b,c,d the value taken by D depends on the LUT configuration, which is 16 entry truth table (configured by Yosys).
-1. Read the result and prepare a data-structure for simulation.
-1. Run simulation: simulate all LUTs in parallel. For each, read its four inputs and update its D output based on its configuration. On a positive clock edge, update the Q output to reflect the value of the D output.
+1. First, ask Yosys to synthesize a design using only LUT4s, see the [script here](synth/synth.yosys). A LUT (Lookup Up Table) is a basic building block of an FPGA. In my understanding, a simplified LUT4 schematic would look like that:<center><img src="lut4.png" width="200px"/></center> The LUT4 has 4 single bit inputs (`a`,`b`,`c`,`d`) and two single bit outputs: `D` and `Q`. Output `D` is 'immediately' updated (as fast as the circuit can do it) when `a`,`b`,`c` or `d` change. `Q` is updated with the value of `D` whenever the clock ticks (positive edge on `clk`). Given `a`,`b`,`c`,`d` the value taken by `D` depends on the LUT configuration, which is a 16 entry truth table (configured by Yosys). It gives the value of bit `D` (0 or 1) based on the values of `a`, `b`, `c` and `d`: four bits that can be either 0 or 1, and thus $2^4=16$ possibilities. This configuration implies that the LUT4 has a small internal memory (16 bits), which is indeed what gets configured by Yosys in the FPGA cells.
 
-And that's all there is to it. Now of course there are some implementations details.
+1. Second, parse the result written by Yosys (a `blif` file) and prepare a data-structure for simulation. The file tells us about the LUT4s and how they are connected. There are a few minor complications that are detailed in the source code comments.
+
+1. Third, run the simulation! The basic idea (we'll improve next) is to simulate  all LUTs in parallel. For each LUT, we read its four inputs and update its D output based on its configuration. Once nothing changes, we simulate a positive clock edge by updating the Q output to reflect the value of the D output. Rinse and repeat.
+
+And that's all there is to it for a basic, working simulator!
+
+To give you a rough outline of the source code:
+- Step 1 is covered in the [synth.yosys](synth/synth.yosys) script and [make.sh](make.sh).
 
 
 ## Objectives

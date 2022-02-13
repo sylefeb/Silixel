@@ -5,33 +5,18 @@
 #include <ctime>
 #include <cmath>
 
-#include "simul.h"
+#include <LibSL/LibSL.h>
+#include <LibSL/LibSL_gl4core.h>
+
+#include "read.h"
+#include "analyze.h"
+#include "simul_cpu.h"
+#include "simul_gpu.h"
 
 // --------------------------------------------------------------
 
-#include <LibSL/LibSL_gl4core.h>
 #include <imgui.h>
 #include <LibSL/UIHelpers/BindImGui.h>
-
-#include "sh_simul.h"
-AutoBindShader::sh_simul      g_ShSimul;
-
-#include "sh_posedge.h"
-AutoBindShader::sh_posedge    g_ShPosEdge;
-
-#include "sh_outports.h"
-AutoBindShader::sh_outports   g_ShOutPorts;
-
-#include "sh_init.h"
-AutoBindShader::sh_init       g_ShInit;
-
-#include "sh_visu.h"
-AutoBindShader::sh_visu       g_ShVisu;
-
-typedef GPUMESH_MVF2(mvf_vertex_2f, mvf_texcoord0_2f) mvf_simple;
-typedef GPUMesh_GL_VBO<mvf_simple>  GLMesh;
-
-AutoPtr<GLMesh>               g_Quad;
 
 // --------------------------------------------------------------
 
@@ -42,23 +27,17 @@ using namespace std;
 #define SCREEN_W   (640) // screen width and height
 #define SCREEN_H   (480)
 
-#define CYCLE_BUFFER_LEN 1024
-
 // --------------------------------------------------------------
 
-GLBuffer g_LUTs_Cfg;         // uint,  one  per LUT (NOTE: 16 bits are used, could pack)
-GLBuffer g_LUTs_Addrs;       // uint,  four per LUT (NOTE: 24 bits per addr is enough, could pack on three)
-GLBuffer g_LUTs_Outputs;     // uint,  one per LUT, bit 0 (D) bit 1 (Q) bit 2 (dirty)
-GLBuffer g_GPU_OutPortsLocs; // uint,  per outport
-GLBuffer g_GPU_OutPortsVals; // uint,  per outport * CYCLE_BUFFER_LEN (NOTE: total overkill, could be one bit)
-GLBuffer g_GPU_OutInits;     // uint, one per output to initialize
+// Shader to visualize LUT outputs
+#include "sh_visu.h"
+AutoBindShader::sh_visu g_ShVisu;
 
-GLTimer  g_GPU_timer;
+// Output ports
+map<string, v2i> g_OutPorts; // name, LUT id and rank in g_OutPortsValues
+Array<int>       g_OutPortsValues; // output port values
 
-// --------------------------------------------------------------
-
-map<string, v2i> g_OutPorts;
-Array<int>       g_OutPortsValues;
+int              g_Cycle = 0;
 
 vector<int>      g_step_starts;
 vector<int>      g_step_ends;
@@ -69,6 +48,9 @@ vector<uchar>    g_cpu_depths;
 vector<uchar>    g_cpu_outputs;
 vector<int>      g_cpu_computelists;
 
+AutoPtr<GLMesh>  g_Quad;
+GLTimer          g_GPU_timer;
+
 bool             g_Use_GPU = true;
 
 // --------------------------------------------------------------
@@ -76,206 +58,6 @@ bool             g_Use_GPU = true;
 bool designHasVGA()
 {
   return (g_OutPorts.count("out_video_vs") > 0);
-}
-
-// --------------------------------------------------------------
-const int G = 128;
-// --------------------------------------------------------------
-
-void initialize(const vector<t_lut>& luts,const vector<int>& ones)
-{
-  int n_luts = (int)luts.size();
-  n_luts += ( (n_luts & (G - 1)) ? (G - (n_luts & (G - 1))) : 0 );
-  g_LUTs_Cfg    .init( n_luts       * sizeof(uint), GL_SHADER_STORAGE_BUFFER);
-  g_LUTs_Addrs  .init((n_luts << 2) * sizeof(uint), GL_SHADER_STORAGE_BUFFER);
-  g_LUTs_Outputs.init( n_luts       * sizeof(uint), GL_SHADER_STORAGE_BUFFER);
-  g_GPU_OutPortsVals.init((int)g_OutPorts.size() * sizeof(uint) * CYCLE_BUFFER_LEN, GL_SHADER_STORAGE_BUFFER);
-  g_GPU_OutPortsLocs.init((int)g_OutPorts.size() * sizeof(uint), GL_SHADER_STORAGE_BUFFER);
-  g_GPU_OutInits.init((int)ones.size() * sizeof(uint), GL_SHADER_STORAGE_BUFFER);
-
-  // we initialize all outputs to zero
-  {
-    glBindBufferARB(GL_SHADER_STORAGE_BUFFER, g_LUTs_Outputs.glId());
-    int *ptr = (int*)glMapBufferARB(GL_SHADER_STORAGE_BUFFER, GL_WRITE_ONLY);
-    memset(ptr, 0x00, g_LUTs_Outputs.size());
-    glUnmapBufferARB(GL_SHADER_STORAGE_BUFFER);
-    glBindBufferARB(GL_SHADER_STORAGE_BUFFER, 0);
-  }
-  // initialize the static LUT table
-  // -> configs
-  {
-    glBindBufferARB(GL_SHADER_STORAGE_BUFFER, g_LUTs_Cfg.glId());
-    int *ptr = (int*)glMapBufferARB(GL_SHADER_STORAGE_BUFFER, GL_WRITE_ONLY);
-    ForIndex(l, (int)luts.size()) {
-      ptr[l] = (int)luts[l].cfg;
-    }
-    glUnmapBufferARB(GL_SHADER_STORAGE_BUFFER);
-    glBindBufferARB(GL_SHADER_STORAGE_BUFFER, 0);
-  }
-  // -> addrs
-  {
-    glBindBufferARB(GL_SHADER_STORAGE_BUFFER, g_LUTs_Addrs.glId());
-    int *ptr = (int*)glMapBufferARB(GL_SHADER_STORAGE_BUFFER, GL_WRITE_ONLY);
-    ForIndex(l, (int)luts.size()) {
-      ForIndex(i, 4) {
-        ptr[(l<<2)+i] = max(0,(int)luts[l].inputs[i]);
-      }
-    }
-    glUnmapBufferARB(GL_SHADER_STORAGE_BUFFER);
-    glBindBufferARB(GL_SHADER_STORAGE_BUFFER, 0);
-  }
-  // -> outport locations
-  {
-    glBindBufferARB(GL_SHADER_STORAGE_BUFFER, g_GPU_OutPortsLocs.glId());
-    int *ptr = (int*)glMapBufferARB(GL_SHADER_STORAGE_BUFFER, GL_WRITE_ONLY);
-    for (auto op : g_OutPorts) {
-      ptr[op.second[0]] = op.second[1];
-    }
-    glUnmapBufferARB(GL_SHADER_STORAGE_BUFFER);
-    glBindBufferARB(GL_SHADER_STORAGE_BUFFER, 0);    
-  }
-  // -> initialized outputs
-  {
-    glBindBufferARB(GL_SHADER_STORAGE_BUFFER, g_GPU_OutInits.glId());
-    int *ptr = (int*)glMapBufferARB(GL_SHADER_STORAGE_BUFFER, GL_WRITE_ONLY);
-    ForIndex(o,ones.size()) { ptr[o] = ones[o]; }
-    glUnmapBufferARB(GL_SHADER_STORAGE_BUFFER);
-    glBindBufferARB(GL_SHADER_STORAGE_BUFFER, 0);
-  }
-  glMemoryBarrier(GL_ALL_BARRIER_BITS);
-}
-
-/* -------------------------------------------------------- */
-
-void simulBegin_gpu(
-  const vector<t_lut>& luts,
-  const vector<int>&   step_starts,
-  const vector<int>&   step_ends,
-  const vector<int>&   ones)
-{
-  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, g_LUTs_Cfg.glId());
-  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, g_LUTs_Addrs.glId());
-  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, g_LUTs_Outputs.glId());
-  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, g_GPU_OutPortsLocs.glId());
-  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, g_GPU_OutPortsVals.glId());
-  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, g_GPU_OutInits.glId());
-  // init cells
-  g_ShInit.begin();
-  g_ShInit.run(v3i((int)ones.size(),1,1));
-  g_ShInit.end();
-  // resolve constant cells
-  ForIndex (c,2) {
-    int n = step_ends[0] - step_starts[0] + 1;
-    g_ShSimul.begin();
-    g_ShSimul.start_lut.set((uint)0);
-    g_ShSimul.num.set((uint)n);
-    g_ShSimul.run(v3i((n / G) + ((n & (G - 1)) ? 1 : 0), 1, 1));
-    g_ShSimul.end();
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-    g_ShPosEdge.begin();
-    n = (int)luts.size();
-    g_ShPosEdge.num.set((uint)n);
-    g_ShPosEdge.run(v3i((n / G) + ((n & (G - 1)) ? 1 : 0), 1, 1));
-    g_ShPosEdge.end();
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-  }
-  // init cells
-  // Why a second time? Some of these registers may have been cleared after const resolve
-  g_ShInit.begin();
-  g_ShInit.run(v3i((int)ones.size(), 1, 1));
-  g_ShInit.end();
-}
-
-/* -------------------------------------------------------- */
-
-int g_Cycle = 0;
-
-void simulCycle_gpu(
-  const vector<t_lut>& luts,
-  const vector<int>&   step_starts,
-  const vector<int>&   step_ends)
-{
-
-  g_ShSimul.begin();
-  
-  ForRange(depth, 1, (int)step_starts.size()-1) {
-    int n = step_ends[depth] - step_starts[depth] + 1;
-    g_ShSimul.start_lut.set((uint)step_starts[depth]);
-    g_ShSimul.num.set((uint)n);
-    g_ShSimul.run(v3i((n / G) + ((n & (G - 1)) ? 1 : 0), 1, 1));
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-  }
-
-  g_ShSimul.end();
-
-  glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-  {
-    g_ShPosEdge.begin();
-    int n = (int)luts.size();
-    g_ShPosEdge.num.set((uint)n);
-    g_ShPosEdge.run(v3i((n / G) + ((n & (G - 1)) ? 1 : 0), 1, 1));
-    g_ShPosEdge.end();
-  }
-
-  glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-  ++g_Cycle;
-
-}
-
-/* -------------------------------------------------------- */
-
-void simulEnd_gpu()
-{
-  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, 0);
-  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, 0);
-  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, 0);
-  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, 0);
-  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, 0);
-  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
-}
-
-/* -------------------------------------------------------- */
-
-uint g_RBCycle = 0;
-
-bool simulReadback_gpu()
-{
-  glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-  // gather outport values
-  g_ShOutPorts.begin();
-  g_ShOutPorts.offset.set((uint)g_OutPorts.size() * g_RBCycle);
-  g_ShOutPorts.run(v3i((int)g_OutPorts.size(), 1, 1)); // TODO: local size >= 32
-  g_ShOutPorts.end();
-
-  ++g_RBCycle;
-
-  if (g_RBCycle == CYCLE_BUFFER_LEN) {
-    // readback buffer
-    glBindBufferARB(GL_SHADER_STORAGE_BUFFER, g_GPU_OutPortsVals.glId());
-    glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, g_OutPortsValues.sizeOfData(), g_OutPortsValues.raw());
-    glBindBufferARB(GL_SHADER_STORAGE_BUFFER, 0);
-    g_RBCycle = 0;
-  }
-
-  return g_RBCycle == 0;
-}
-
-/* -------------------------------------------------------- */
-
-void simulPrintOutput_gpu(const vector<pair<string, int> >& outbits)
-{
-  // display result (assumes readback done)
-  int val = 0;
-  string str;
-  for (int b = 0; b < outbits.size(); b++) {
-    int vb = g_OutPortsValues[b];
-    str = (vb ? "1" : "0") + str;
-    val += vb << b;
-  }
-  fprintf(stderr, "b%s (d%d h%x)\n", str.c_str(), val, val);
 }
 
 /* -------------------------------------------------------- */
@@ -463,7 +245,7 @@ void mainRender()
     simulCPU();
   }
 
-  // basic rendering 
+  // basic rendering
   LibSL::GPUHelpers::clearScreen(LIBSL_COLOR_BUFFER | LIBSL_DEPTH_BUFFER, 0.2f, 0.2f, 0.2f);
 
   // render display
@@ -515,8 +297,8 @@ int main(int argc, char **argv)
 
     /// init simple UI (glut clone for both GL and D3D)
     cerr << "Init SimpleUI   ";
-    SimpleUI::onRender = mainRender;
     SimpleUI::init(SCREEN_W, SCREEN_H);
+    SimpleUI::onRender = mainRender;
     cerr << "[OK]" << endl;
 
     /// bind imgui
@@ -541,10 +323,6 @@ int main(int argc, char **argv)
     g_Quad->end();
 
     /// GPU shaders init
-    g_ShSimul.init();
-    g_ShPosEdge.init();
-    g_ShOutPorts.init();
-    g_ShInit.init();
     g_ShVisu.init();
 
     /// GPU timer
@@ -570,7 +348,7 @@ int main(int argc, char **argv)
     g_OutPortsValues.allocate(rank * CYCLE_BUFFER_LEN);
 
     /// GPU buffers init
-    initialize(g_luts, g_ones);
+    simulInit_gpu(g_luts, g_ones);
 
     // init CPU simulation
     simulInit_cpu(g_luts, g_step_starts, g_step_ends, g_ones, g_cpu_computelists, g_cpu_outputs);
@@ -591,8 +369,8 @@ int main(int argc, char **argv)
         g_GPU_timer.stop();
         simulPrintOutput_gpu(outbits);
         auto ms = g_GPU_timer.waitResult();
-        printf("[GPU] %d msec, ~ %f Hz, cycle time: %f usec\n", 
-          (int)ms, 
+        printf("[GPU] %d msec, ~ %f Hz, cycle time: %f usec\n",
+          (int)ms,
           (double)n_cycles / ((double)ms / 1000.0),
           (double)ms * 1000.0 / (double)n_cycles);
       }
@@ -632,17 +410,8 @@ int main(int argc, char **argv)
     simulEnd_gpu();
 
     /// clean exit
-    g_ShSimul.terminate();
-    g_ShPosEdge.terminate();
-    g_ShOutPorts.terminate();
-    g_ShInit.terminate();
+    simulTerminate_gpu();
     g_ShVisu.terminate();
-    g_LUTs_Addrs.terminate();
-    g_LUTs_Cfg.terminate();
-    g_LUTs_Outputs.terminate();
-    g_GPU_OutPortsLocs.terminate();
-    g_GPU_OutPortsVals.terminate();
-    g_GPU_OutInits.terminate();
     g_GPU_timer.terminate();
     g_FramebufferTex = Tex2DRGBA_Ptr();
     g_Quad = AutoPtr<GLMesh>();

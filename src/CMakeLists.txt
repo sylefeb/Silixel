@@ -28,23 +28,33 @@ ADD_EXECUTABLE(silixel
 	sh_visu.fp
 	sh_visu.vp
 	sh_visu.h
-	simul.cc
-	simul.h
+	simul_cpu.cc
+	simul_cpu.h
+	simul_gpu.cc
+	simul_gpu.h
+	read.cc
+	read.h
+	analyze.cc
+	analyze.h
 	)
 
 TARGET_LINK_LIBRARIES(silixel LibSL LibSL_gl4core)
 
 ADD_DEFINITIONS(-DSRC_PATH=\"${CMAKE_SOURCE_DIR}\")
 
-ADD_EXECUTABLE(silixel-cpu
+ADD_EXECUTABLE(silixel_cpu
+	silixel_cpu.cc
 	simul_cpu.cc
-	simul.cc
-	simul.h
+	simul_cpu.h
 	blif.cc
 	blif.h
+	read.cc
+	read.h
+	analyze.cc
+	analyze.h
 	)
 
-TARGET_LINK_LIBRARIES(silixel-cpu LibSL)
+TARGET_LINK_LIBRARIES(silixel_cpu LibSL)
 
 # IF(WIN32)
 # INSTALL(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/release/silixel.exe" DESTINATION ${CMAKE_SOURCE_DIR}/bin)

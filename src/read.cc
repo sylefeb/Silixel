@@ -1,0 +1,162 @@
+// @sylefeb 2022-01-04
+
+#include <cstdlib>
+#include <cstdio>
+#include <vector>
+#include <fstream>
+#include <iostream>
+#include <limits>
+#include <algorithm>
+#include <string>
+#include <sstream>
+#include <set>
+
+using namespace std;
+
+#include "read.h"
+#include "blif.h"
+
+// -----------------------------------------------------------------------------
+
+void buildSimulData(
+  t_blif&                     _blif, // might change
+  vector<t_lut>&              _luts,
+  vector<pair<string, int> >& _outbits,
+  vector<int>&                _ones)
+{
+  // gather output names and their source gate/latch
+  map<string, v2i> output2src;
+  ForArray(_blif.gates, g) {
+    output2src[_blif.gates[g].output] = v2i(0, g);
+  }
+  ForArray(_blif.latches, l) {
+    output2src[_blif.latches[l].output] = v2i(1, l);
+  }
+  // number all outputs
+  map<string, int> indices;
+
+  // prepare to create luts
+  vector<int> lut_gates;
+  // -> find register outputs that depend on other registers
+  for (const auto& o : output2src) {
+    if (o.second[0]) { // latch
+      // find input type
+      sl_assert(output2src.count(_blif.latches[o.second[1]].input));
+      auto& I = output2src.find(_blif.latches[o.second[1]].input);
+      // cerr << o.first << " <:: " << I->first << '\n';
+      if (I->second[0]) {
+        // input of this latch is the output (Q) of an earlier latch
+        // we need a passtrhrough gate to do that
+        int g = (int)_blif.gates.size();
+        _blif.gates.push_back(t_gate_nfo());
+        _blif.gates.back().config_strings.push_back(make_pair("1", "1"));
+        _blif.gates.back().inputs.push_back(I->first);
+        string ex = "__extra__" + I->first;
+        _blif.gates.back().output = ex;
+        _blif.latches[o.second[1]].input = ex;
+        output2src[ex] = v2i(0, g);
+      }
+    }
+  }
+  // -> create one LUT per latch
+  for (const auto& o : output2src) {
+    if (o.second[0]) { // latch
+      // find input type
+      auto& I = output2src.find (_blif.latches[o.second[1]].input);
+      // cerr << o.first << " <:: " << I->first << '\n';
+      sl_assert(I != output2src.end());
+      sl_assert(I->second[0] == 0); // other has to be a gate
+      /// create LUT for the D output (latch input)
+      /// assign output to Q (latch output)
+      // store indices of input (D) and output (Q)
+      indices[I->first] = (((int)lut_gates.size()) << 1);
+      indices[o.first]  = (((int)lut_gates.size()) << 1) + 1;
+      // gate that corresponds to the lut
+      lut_gates.push_back(I->second[1]);
+    }
+  }
+  // -> create one LUT per comb output
+  for (const auto& o : output2src) {
+    if (!o.second[0]) { // gate
+      // ignore clock
+      if (o.first == "clock") {
+        continue;
+      }
+      // check if the output is already assigned
+      if (indices.count(o.first)) {
+        continue;
+      }
+      // check that it does not use clock (really??)
+      bool skip = false;
+      for (auto i : _blif.gates[o.second[1]].inputs) {
+        if (i == "clock") {
+          skip = true;
+          break;
+        }
+      }
+      if (skip) continue;
+      /// create LUT for the D output
+      // store index
+      indices[o.first] = (((int)lut_gates.size()) << 1);
+      // gate that corresponds to the lut
+      lut_gates.push_back(o.second[1]);
+    }
+  }
+  // -> instantiate LUTs
+  for (auto g : lut_gates) {
+    _luts.push_back(t_lut());
+    _luts.back().cfg = lut_config(_blif.gates[g].config_strings);
+    ForIndex(i, 4) {
+      _luts.back().inputs[i] = -1;
+    }
+    int i = 4 - (int)_blif.gates[g].inputs.size();
+    for (auto inp : _blif.gates[g].inputs) {
+      auto I = indices.find(inp);
+      if (I == indices.end()) {
+        fprintf(stderr, "<warning> input '%s' disconnected\n",inp.c_str());
+      } else {
+        _luts.back().inputs[i++] = I->second;
+      }
+    }
+  }
+
+  for (auto op : _blif.outputs) {
+    auto I = indices.find(op);
+    if (I == indices.end()) {
+      fprintf(stderr, "<warning> outport '%s' disconnected\n", op.c_str());
+    } else {
+      _outbits.push_back(make_pair(op, I->second));
+    }
+  }
+
+  for (const auto& l : _blif.latches) {
+    if (l.init == "1") {
+      auto I = indices.find(l.output);
+      sl_assert(I != indices.end());
+      _ones.push_back(I->second);
+    }
+  }
+
+  /// DEBUG
+#if 0
+  for (int l = 0; l < _luts.size(); ++l) {
+    fprintf(stderr,"LUT %3d, cfg:%4x, inputs: %4d %4d %4d %4d\n",
+      l<<1,_luts[l].cfg,
+      _luts[l].inputs[0], _luts[l].inputs[1],
+      _luts[l].inputs[2], _luts[l].inputs[3]);
+  }
+#endif
+}
+
+// -----------------------------------------------------------------------------
+
+void readDesign(vector<t_lut>& _luts, vector<pair<string,int> >& _outbits, vector<int>& _ones)
+{
+  t_blif blif;
+  parse(SRC_PATH "/build/synth.blif",blif);
+
+  buildSimulData(blif, _luts, _outbits, _ones);
+
+}
+
+// -----------------------------------------------------------------------------
