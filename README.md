@@ -18,12 +18,18 @@ Fundamentally, the idea is as follows:
 
 1. Third, run the simulation! The basic idea (we'll improve next) is to simulate  all LUTs in parallel. For each LUT, we read its four inputs and update its D output based on its configuration. Once nothing changes, we simulate a positive clock edge by updating the Q output to reflect the value of the D output. Rinse and repeat.
 
-And that's all there is to it for a basic, working simulator!
+And that's all there is to it for a basic, working simulator! Let's now briefly give an overview of the source code, and then take a closer look at how simulation behaves. This will give us a better understanding of how a gate network behaves, lead to some optimizations, and let us understand the performance tradeoffs.
+
+## Source code overview
 
 To give you a rough outline of the source code:
 - Step 1 is covered in the [synth.yosys](synth/synth.yosys) script and [synth.sh](synth.sh).
 - Step 2 is covered in [blif.cc](src/blif.cc) and [read.cc](src/read.cc)
 - Step 3 is covered in [simul_cpu.cc](src/blif.cc) and [simul_gpu.cc](src/read.cc), both being called from the main app [silixel.cc](src/silixel.cc). A second app does only CPU simulation -- [silixel_cpu.cc](src/silixel_cpu.cc) -- it is very simple so that can be a good starting point. The two important GPU shaders are [sh_simul.cs](src/sh_simul.cs) and [sh_posedge.cs](src/sh_posedge.cs).
+
+## A closer look
+
+
 
 ## Compile and run
 
@@ -32,7 +38,13 @@ First, make sure to get the submodules:
 git submodule init
 git submodule update
 ```
-Use `CMake` to prepare a Makefile for your system, then `make`.
+Use `CMake` to prepare a Makefile for your system, then `make`:
+```
+cd build
+cmake ..
+make
+cd ..
+```
 From a command line in the repo root, run (yosys has to be installed and in PATH):
 
 ```

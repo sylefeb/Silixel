@@ -1,4 +1,10 @@
 // @sylefeb 2022-01-08
+/*
+
+Simple BLIF file parser, nothing special here.
+Reads the inputs, outputs, gates and latches into a t_blif struct.
+
+*/
 
 #include "blif.h"
 #include <LibSL/LibSL.h>

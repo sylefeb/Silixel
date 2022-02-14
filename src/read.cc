@@ -17,7 +17,34 @@ using namespace std;
 #include "blif.h"
 
 // -----------------------------------------------------------------------------
+/*
+  Reads the design from a BLIF file
+*/
+void readDesign(
+  vector<t_lut>& _luts,
+  vector<pair<string,int> >& _outbits,
+  vector<int>& _ones)
+{
+  t_blif blif;
+  // parse the blif file
+  parse(SRC_PATH "/build/synth.blif",blif);
+  // build the design datastructure
+  buildSimulData(blif, _luts, _outbits, _ones);
+}
 
+// -----------------------------------------------------------------------------
+/*
+  From a read blif file, prepares a data-structure for simulation
+  The blif file contains:
+  - gates, which are LUT4s
+  - latches, which indicate a flip-flop
+  In most cases, a latch corresponds to the output of a gate, so it is
+  simply a matter of connecting to the Q output of the corresponding gate.
+  There are cases however where latches are chained. This requires us to
+  instantiate gates to implement the flip-flops (since we only simulate
+  gates). These gates are passthrough, and only their Q output is used,
+  see tag [extra gates] in comments below.
+*/
 void buildSimulData(
   t_blif&                     _blif, // might change
   vector<t_lut>&              _luts,
@@ -34,7 +61,6 @@ void buildSimulData(
   }
   // number all outputs
   map<string, int> indices;
-
   // prepare to create luts
   vector<int> lut_gates;
   // -> find register outputs that depend on other registers
@@ -43,10 +69,9 @@ void buildSimulData(
       // find input type
       sl_assert(output2src.count(_blif.latches[o.second[1]].input));
       auto& I = output2src.find(_blif.latches[o.second[1]].input);
-      // cerr << o.first << " <:: " << I->first << '\n';
       if (I->second[0]) {
         // input of this latch is the output (Q) of an earlier latch
-        // we need a passtrhrough gate to do that
+        // we need a pass-through gate to do that      [extra gates]
         int g = (int)_blif.gates.size();
         _blif.gates.push_back(t_gate_nfo());
         _blif.gates.back().config_strings.push_back(make_pair("1", "1"));
@@ -63,7 +88,6 @@ void buildSimulData(
     if (o.second[0]) { // latch
       // find input type
       auto& I = output2src.find (_blif.latches[o.second[1]].input);
-      // cerr << o.first << " <:: " << I->first << '\n';
       sl_assert(I != output2src.end());
       sl_assert(I->second[0] == 0); // other has to be a gate
       /// create LUT for the D output (latch input)
@@ -86,7 +110,7 @@ void buildSimulData(
       if (indices.count(o.first)) {
         continue;
       }
-      // check that it does not use clock (really??)
+      // check that it does not use clock // NOTE:investigate
       bool skip = false;
       for (auto i : _blif.gates[o.second[1]].inputs) {
         if (i == "clock") {
@@ -146,17 +170,6 @@ void buildSimulData(
       _luts[l].inputs[2], _luts[l].inputs[3]);
   }
 #endif
-}
-
-// -----------------------------------------------------------------------------
-
-void readDesign(vector<t_lut>& _luts, vector<pair<string,int> >& _outbits, vector<int>& _ones)
-{
-  t_blif blif;
-  parse(SRC_PATH "/build/synth.blif",blif);
-
-  buildSimulData(blif, _luts, _outbits, _ones);
-
 }
 
 // -----------------------------------------------------------------------------
