@@ -21,12 +21,22 @@ Fundamentally, the idea is as follows:
 And that's all there is to it for a basic, working simulator!
 
 To give you a rough outline of the source code:
-- Step 1 is covered in the [synth.yosys](synth/synth.yosys) script and [make.sh](make.sh).
+- Step 1 is covered in the [synth.yosys](synth/synth.yosys) script and [synth.sh](synth.sh).
+- Step 2 is covered in [blif.cc](src/blif.cc) and [read.cc](src/read.cc)
+- Step 3 is covered in [simul_cpu.cc](src/blif.cc) and [simul_gpu.cc](src/read.cc), both being called from the main app [silixel.cc](src/silixel.cc). A second app does only CPU simulation -- [silixel_cpu.cc](src/silixel_cpu.cc) -- it is very simple so that can be a good starting point. The two important GPU shaders are [sh_simul.cs](src/sh_simul.cs) and [sh_posedge.cs](src/sh_posedge.cs).
 
+## Compile and run
 
-## Objectives
+First, make sure to get the submodules:
+```
+git submodule init
+git submodule update
+```
+Use `CMake` to prepare a Makefile for your system, then `make`.
+From a command line in the repo root, run (yosys has to be installed and in PATH):
 
-- Learn how a simple gate level simulator operates
-- Provide both a CPU and GPU implementation
-- Simulate non trivial designs
-- Be a starting point for other, more specialized projects
+```
+./synth.sh silice_vga_test
+```
+
+This synthesizes a design and generate the output in [`build`](./build). There are several designs, see [`designs`](./designs).
