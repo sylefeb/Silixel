@@ -157,6 +157,9 @@ void simulBegin_gpu(
 
 /* -------------------------------------------------------- */
 
+/*
+Simulate one cycle on the GPU
+*/
 void simulCycle_gpu(
   const vector<t_lut>& luts,
   const vector<int>&   step_starts,
@@ -164,27 +167,24 @@ void simulCycle_gpu(
 {
 
   g_ShSimul.begin();
-
+  // iterate on depth levels (skipping const depth 0)
   ForRange(depth, 1, (int)step_starts.size()-1) {
+    // only update LUTs at this particular level
     int n = step_ends[depth] - step_starts[depth] + 1;
     g_ShSimul.start_lut.set((uint)step_starts[depth]);
     g_ShSimul.num.set((uint)n);
     g_ShSimul.run(v3i((n / G) + ((n & (G - 1)) ? 1 : 0), 1, 1));
+    // sync required between iterations
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
   }
-
   g_ShSimul.end();
-
-  glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-  {
-    g_ShPosEdge.begin();
-    int n = (int)luts.size();
-    g_ShPosEdge.num.set((uint)n);
-    g_ShPosEdge.run(v3i((n / G) + ((n & (G - 1)) ? 1 : 0), 1, 1));
-    g_ShPosEdge.end();
-  }
-
+  // simulate positive clock edge
+  g_ShPosEdge.begin();
+  int n = (int)luts.size();
+  g_ShPosEdge.num.set((uint)n);
+  g_ShPosEdge.run(v3i((n / G) + ((n & (G - 1)) ? 1 : 0), 1, 1));
+  g_ShPosEdge.end();
+  // sync required to ensure further reads see the update
   glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
   ++g_Cycle;

@@ -46,6 +46,7 @@ static inline void simulLUT_cpu(
 
 // -----------------------------------------------------------------------------
 
+// add LUT fanout to the compute lists
 static inline void addFanout(
   int                   l,
   int                   q_else_d,
@@ -55,7 +56,6 @@ static inline void addFanout(
   vector<int>&         _computelists,
   vector<uchar>&       _outputs
 ) {
-  // add fanout to compute list
   int cur   = fanout[l];
   int other = fanout[cur];
   while (other != -1) {
@@ -67,9 +67,9 @@ static inline void addFanout(
         int dpt = depths[other_lut];
         int cls = _computelists[dpt];
         int idx = _computelists[cls]++;
-        _computelists[cls + 1 + idx] = other_lut;        
+        _computelists[cls + 1 + idx] = other_lut;
       }
-    } 
+    }
     ++cur;
     other = fanout[cur];
   }
@@ -78,7 +78,7 @@ static inline void addFanout(
 // -----------------------------------------------------------------------------
 
 static inline void simulLUT_cpu(
-  int                   l, 
+  int                   l,
   const vector<t_lut>&  luts,
   const vector<uchar>&  depths,
   int                   numdepths,
@@ -103,18 +103,15 @@ static inline void simulLUT_cpu(
     else           _outputs[l] &= ~1;
     // add fanout to compute list
     addFanout(l, 0, depths, numdepths, fanout, _computelists, _outputs);
-    {
-      // add to posedge list
-      if ((_outputs[l] & 8) == 0) { // not yet inserted
-        _outputs[l] |= 8; // tag as inserted
-        // insert in posedge compute list
-        int dpt = numdepths;
-        int cls = _computelists[dpt];
-        int idx = _computelists[cls]++;
-        _computelists[cls + 1 + idx] = l;
-      }
+    // add this LUT to posedge list
+    if ((_outputs[l] & 8) == 0) { // not yet inserted
+      _outputs[l] |= 8; // tag as inserted
+      // insert in posedge compute list
+      int dpt = numdepths;
+      int cls = _computelists[dpt];
+      int idx = _computelists[cls]++;
+      _computelists[cls + 1 + idx] = l;
     }
-
   }
   // reset inserted flag (preserve posedge flag)
   _outputs[l] &= 3|8;
@@ -196,7 +193,7 @@ void simulCycle_cpu(
   const vector<int>&   fanout,
   vector<int>&        _computelists,
 	vector<uchar>&      _outputs)
-{  
+{
   for (int depth = 0; depth < step_starts.size(); ++depth) {
     // process LUTs
     int cls = _computelists[depth];
@@ -206,7 +203,7 @@ void simulCycle_cpu(
       int l = _computelists[cls + 1 + n];
       simulLUT_cpu(l, luts, depths, (int)step_starts.size(), fanout, _computelists, _outputs);
     }
-    // clear compute list for this depth    
+    // clear compute list for this depth
     _computelists[cls] = 0;
   }
 }
@@ -267,7 +264,7 @@ void simulPosEdge_cpu(
 // -----------------------------------------------------------------------------
 
 void simulPrintOutput_cpu(
-  const vector<uchar>&             outputs, 
+  const vector<uchar>&             outputs,
   const vector<pair<string,int> >& outbits)
 {
   // display result
