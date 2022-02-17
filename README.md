@@ -1,22 +1,25 @@
 # Silixel
 *Exploring gate-level simulation on CPU and GPU*
 
+This repository contains my experiments on gate-level simulation. By that I mean taking the output of [Yosys](https://github.com/YosysHQ/yosys) and simulating the gate network.
+
 > The purpose of this repo is learning about simulation and having fun hacking and understanding how this is possible at all. For actual, efficient simulation please refer to *Verilator*, *CXXRTL* and *Icarus Verilog*.
 
 > **Work in progress**: I am currently working on this README and commenting/cleaning the source code. Feedback is welcome!
 
-<center><img src="silice_vga_test.gif" width="400px"/><br><i>A VGA test design being simulated on the GPU, with gate binary outputs overlaid.</i></center><br>
-
-This repository contains my experiments on gate-level simulation. By that I mean taking the output of [Yosys](https://github.com/YosysHQ/yosys) and simulating the gate network (not taking delays into account - although I believe this could be added).
+<p align="center">
+<img src="silice_vga_test.gif"><br>
+<i>A VGA test design being simulated on the GPU, with gate binary outputs overlaid.</i>
+</p>
 
 This all started as I stumbled upon an entry to the Google CTF 2019 contest: [reversing-gpurtl](https://www.youtube.com/watch?v=3ac9HAsfV8c). The source code [is available](https://github.com/google/google-ctf/tree/master/2019/finals/reversing-gpurtl) and shows how to brute force a gate-level simulation onto the GPU.
 
-> What does that mean? How does that work? We're going to precisely answer these questions!
+*What does that mean? How does that work? We're going to precisely answer these questions!*
 
 By analyzing the `reversing-gpurtl` source code and scripts (which are in Python and Rust), I got a good understanding of how the gate level simulation was achieved. And I was surprised to discover that it is *simple*!
 
 But first, what is a *gate* in our context? The simplest (and only!) logical element in the network will be a *LUT4*. A LUT (Lookup Up Table) is a basic building block of an FPGA. A simplified LUT4 schematic would look like that:
-<center><img src="lut4.png" width="200px"/></center>
+<p align="center"><img src="lut4.png" width="200px"></p>
 
 The LUT4 has 4 single bit inputs (`a`,`b`,`c`,`d`) and two single bit outputs: `D` and `Q`. Output `D` is 'immediately' updated (as fast as the circuit can do it) when `a`,`b`,`c` or `d` change. `Q` is updated with the value of `D` whenever the clock ticks (positive edge on `clk`). Given `a`,`b`,`c`,`d` the value taken by `D` depends on the LUT configuration, which is a 16 entry truth table (configured by Yosys). It gives the value of bit `D` (0 or 1) based on the values of `a`, `b`, `c` and `d`: four bits that can be either 0 or 1, and thus $2^4=16$ possibilities. This configuration implies that the LUT4 has a small internal memory (16 bits), which is indeed what gets configured by Yosys in the FPGA cells.
 
@@ -156,4 +159,4 @@ This synthesizes a design and generate the output in [`build`](./build). There a
 
 After running `silixel` you should see this:
 
-<center><img src="silice_vga_test.gif" width="400px"/></center>
+<p align="center"><img src="silice_vga_test.gif"></p>
