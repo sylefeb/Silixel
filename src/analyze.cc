@@ -229,6 +229,11 @@ void reorderLUTs(
 
 // -----------------------------------------------------------------------------
 
+/*
+Builds a data-structure representing the fanout of each LUT: the list
+of LUTs that use it as an input. This is used to only simulate the LUTs
+which inputs have changed at each depth.
+*/
 void buildFanout(
   vector<t_lut>&             _luts,
   vector<int>&               _fanout)
