@@ -53,7 +53,7 @@ void buildSimulData(
     if (o.second[0]) { // latch
       // find input type
       sl_assert(output2src.count(_blif.latches[o.second[1]].input));
-      auto& I = output2src.find(_blif.latches[o.second[1]].input);
+      const auto& I = output2src.find(_blif.latches[o.second[1]].input);
       if (I->second[0]) {
         // input of this latch is the output (Q) of an earlier latch
         // we need a pass-through gate to do that      [extra gates]
@@ -72,7 +72,7 @@ void buildSimulData(
   for (const auto& o : output2src) {
     if (o.second[0]) { // latch
       // find input type
-      auto& I = output2src.find (_blif.latches[o.second[1]].input);
+      const auto& I = output2src.find (_blif.latches[o.second[1]].input);
       sl_assert(I != output2src.end());
       sl_assert(I->second[0] == 0); // other has to be a gate
       /// create LUT for the D output (latch input)

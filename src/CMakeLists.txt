@@ -38,7 +38,11 @@ ADD_EXECUTABLE(silixel
 	analyze.h
 	)
 
+IF(LINUX)
+TARGET_LINK_LIBRARIES(silixel LibSL LibSL_gl4core freeglut)
+ELSE()
 TARGET_LINK_LIBRARIES(silixel LibSL LibSL_gl4core)
+ENDIF()
 
 ADD_DEFINITIONS(-DSRC_PATH=\"${CMAKE_SOURCE_DIR}\")
 

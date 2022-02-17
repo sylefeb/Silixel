@@ -157,6 +157,6 @@ From a command line in the repo root, run (yosys has to be installed and in PATH
 
 This synthesizes a design and generate the output in [`build`](./build). There are several designs, see [`designs`](./designs).
 
-After running `silixel` you should see this:
+After running `./build/src/silixel` you should see this:
 
 <p align="center"><img src="silice_vga_test.gif"></p>
