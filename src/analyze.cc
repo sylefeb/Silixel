@@ -1,5 +1,14 @@
 // @sylefeb 2022-01-04
+/*
 
+Analyzes the design, determines the 'depth' of each LUT by propagating
+from the Q outputs (depth 0). The LUT depth is 1 + the max of its input depths.
+Within a clock cycle:
+- LUTs of lower depth are not influenced by LUTs of higher depth.
+- LUTs at a same depth are not influenced by each others.
+The LUTs are then sorted by depth and the data structure reordered.
+
+*/
 #include <cstdlib>
 #include <cstdio>
 #include <vector>
@@ -20,32 +29,33 @@ using namespace std;
 
 // -----------------------------------------------------------------------------
 
-bool analyzeStep(const vector<t_lut>& luts,int& _swap,vector<int>& _outputs)
+// Propagates depths through the network. Returns whether something changed.
+bool analyzeStep(const vector<t_lut>& luts,int& _swap,vector<int>& _depths)
 {
   bool changed = false;
-  int r_off = _swap ? ((int)luts.size()<<1) : 0;
-  int w_off = _swap ? 0 : ((int)luts.size()<<1);
+  int r_off = _swap ? ((int)luts.size()<<1) : 0; // read from offset
+  int w_off = _swap ? 0 : ((int)luts.size()<<1); // write to offset
   for (int l=0;l<luts.size();++l) {
-    // copy outputs
-    _outputs[w_off + (l<<1) + 0] = _outputs[r_off + (l<<1) + 0];
-    _outputs[w_off + (l<<1) + 1] = _outputs[r_off + (l<<1) + 1];
-    // read inputs
+    // copy output depths
+    _depths[w_off + (l<<1) + 0] = _depths[r_off + (l<<1) + 0];
+    _depths[w_off + (l<<1) + 1] = _depths[r_off + (l<<1) + 1];
+    // read input depths
     unsigned short cfg_idx = 0;
     int new_value = 0;
     for (int i=0;i<4;++i) {
       if (luts[l].inputs[i] > -1) {
-        int other_value = _outputs[r_off + luts[l].inputs[i]];
+        int other_value = _depths[r_off + luts[l].inputs[i]];
         if (other_value < std::numeric_limits<int>::max()) ++other_value;
         new_value       = max(new_value , other_value);
       }
     }
-    // update comb outputs
-    if (_outputs[r_off + (l<<1) + 0] != new_value) {
-      _outputs[w_off + (l<<1) + 0] = new_value;
+    // update D outputs
+    if (_depths[r_off + (l<<1) + 0] != new_value) {
+      _depths[w_off + (l<<1) + 0] = new_value;
       changed = true;
     }
-    // flip-flops Q forced to zero
-    _outputs[w_off + (l<<1) + 1] = 0;
+    // flip-flops Q forced to depth zero
+    _depths[w_off + (l<<1) + 1] = 0;
   }
   _swap = 1 - _swap;
   return changed;
@@ -63,7 +73,8 @@ void analyze(const vector<t_lut>& luts,
 {
   int swap = 0;
   vector<int> outputs;
-  outputs.resize(luts.size() << 2, std::numeric_limits<int>::max()); // x2 (out,reg), x2 buffers
+  outputs.resize(luts.size() << 2, // x2 (D,Q), x2 buffers
+                 std::numeric_limits<int>::max());
   // iterate
   bool changed = true;
   int maxiter = 256;
@@ -74,7 +85,6 @@ void analyze(const vector<t_lut>& luts,
     fprintf(stderr, "cannot perform analysis, loop?");
     exit(-1);
   }
-
   // reorder by increasing depth
   vector<pair<int, int> > source;
   source.resize(luts.size());

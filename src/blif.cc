@@ -1,7 +1,7 @@
 // @sylefeb 2022-01-08
 /*
 
-Simple BLIF file parser, nothing special here.
+Simple BLIF file parser, nothing special.
 Reads the inputs, outputs, gates and latches into a t_blif struct.
 
 */
