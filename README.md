@@ -13,8 +13,13 @@ This all started as I stumbled upon an entry to the Google CTF 2019 contest: [re
 
 By analyzing the `reversing-gpurtl` source code and scripts (which are in Python and Rust), I got a good understanding of how the gate level simulation was achieved. And I was surprised to discover that it is *simple*!
 
+But first, what is a *gate* in our context? The simplest (and only!) logical element in the network will be a *LUT4*. A LUT (Lookup Up Table) is a basic building block of an FPGA. In my understanding, a simplified LUT4 schematic would look like that: 
+<center><img src="lut4.png" width="200px"/></center>
+
+The LUT4 has 4 single bit inputs (`a`,`b`,`c`,`d`) and two single bit outputs: `D` and `Q`. Output `D` is 'immediately' updated (as fast as the circuit can do it) when `a`,`b`,`c` or `d` change. `Q` is updated with the value of `D` whenever the clock ticks (positive edge on `clk`). Given `a`,`b`,`c`,`d` the value taken by `D` depends on the LUT configuration, which is a 16 entry truth table (configured by Yosys). It gives the value of bit `D` (0 or 1) based on the values of `a`, `b`, `c` and `d`: four bits that can be either 0 or 1, and thus $2^4=16$ possibilities. This configuration implies that the LUT4 has a small internal memory (16 bits), which is indeed what gets configured by Yosys in the FPGA cells.
+
 Fundamentally, the idea is as follows:
-1. First, ask Yosys to synthesize a design using only LUT4s, see the [script here](synth/synth.yosys). A LUT (Lookup Up Table) is a basic building block of an FPGA. In my understanding, a simplified LUT4 schematic would look like that:<center><img src="lut4.png" width="200px"/></center> The LUT4 has 4 single bit inputs (`a`,`b`,`c`,`d`) and two single bit outputs: `D` and `Q`. Output `D` is 'immediately' updated (as fast as the circuit can do it) when `a`,`b`,`c` or `d` change. `Q` is updated with the value of `D` whenever the clock ticks (positive edge on `clk`). Given `a`,`b`,`c`,`d` the value taken by `D` depends on the LUT configuration, which is a 16 entry truth table (configured by Yosys). It gives the value of bit `D` (0 or 1) based on the values of `a`, `b`, `c` and `d`: four bits that can be either 0 or 1, and thus $2^4=16$ possibilities. This configuration implies that the LUT4 has a small internal memory (16 bits), which is indeed what gets configured by Yosys in the FPGA cells.
+1. First, ask Yosys to synthesize a design using only LUT4s, see the [script here](synth/synth.yosys). 
 
 1. Second, parse the result written by Yosys (a `blif` file) and prepare a data-structure for simulation. The file tells us about the LUT4s and how they are connected. There are a few minor complications that are detailed in the source code comments.
 
@@ -29,7 +34,7 @@ Let's now briefly look at an overview of the source code, and then take a closer
 To give you a rough outline of the source code:
 - Step 1 is covered in the [synth.yosys](synth/synth.yosys) script and [synth.sh](synth.sh).
 - Step 2 is covered in [blif.cc](src/blif.cc) and [read.cc](src/read.cc)
-- Step 3 is covered in [simul_cpu.cc](src/blif.cc) and [simul_gpu.cc](src/read.cc), both being called from the main app [silixel.cc](src/silixel.cc). A second app does only CPU simulation -- [silixel_cpu.cc](src/silixel_cpu.cc) -- it is very simple so that can be a good starting point. The two important GPU shaders are [sh_simul.cs](src/sh_simul.cs) and [sh_posedge.cs](src/sh_posedge.cs).
+- Step 3 is covered in [simul_cpu.cc](src/blif.cc) and [simul_gpu.cc](src/read.cc), both being called from the main app [silixel.cc](src/silixel.cc). A second application does only CPU simulation (see [silixel_cpu.cc](src/silixel_cpu.cc)). It is very simple so that can be a good starting point. The two important GPU shaders are [sh_simul.cs](src/sh_simul.cs) and [sh_posedge.cs](src/sh_posedge.cs).
 
 ## A closer look
 
@@ -149,4 +154,4 @@ This synthesizes a design and generate the output in [`build`](./build). There a
 
 After running `silixel` you should see this:
 
-<center><img src="silice_vga_test.png" width="600px"/></center>
+<center><img src="silice_vga_test.gif" width="400px"/></center>
