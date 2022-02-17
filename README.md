@@ -55,7 +55,7 @@ is used both on the CPU and GPU implementations. The second one is used only on 
 
 Let's have a look at a simple network:
 
-<center><img src="depths.png" width="600px"/></center>
+<p align="center"><img src="depths.png" width="600px"/></p>
 
 I numbered the LUTs from `L0` to `L5`. The LUTs in the network have been arranged
 by *combinational depth*. Given a LUT, the depth counts how many other LUTs are
