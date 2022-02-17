@@ -3,7 +3,7 @@
 
 > The purpose of this repo is learning about simulation and having fun hacking and understanding how this is possible at all. For actual, efficient simulation please refer to *Verilator*, *CXXRTL* and *Icarus Verilog*.
 
-> **Work in progress**: I am currently working on this README and source code, feedback is welcome.
+> **Work in progress**: I am currently working on this README and commenting/cleaning the source code. Feedback is welcome!
 
 This repository contains my experiments on gate-level simulation. By that I mean taking the output of [Yosys](https://github.com/YosysHQ/yosys) and simulating the gate network (not taking delays into account - although I believe this could be added).
 
@@ -36,7 +36,7 @@ To give you a rough outline of the source code:
 - Step 2 is covered in [blif.cc](src/blif.cc) and [read.cc](src/read.cc)
 - Step 3 is covered in [simul_cpu.cc](src/blif.cc) and [simul_gpu.cc](src/read.cc), both being called from the main app [silixel.cc](src/silixel.cc). A second application does only CPU simulation (see [silixel_cpu.cc](src/silixel_cpu.cc)). It is very simple so that can be a good starting point. The two important GPU shaders are [sh_simul.cs](src/sh_simul.cs) and [sh_posedge.cs](src/sh_posedge.cs).
 
-## A closer look
+## A closer look and some improvements
 
 Blindly simulating all LUTs in parallel works just fine. However, it is quite inefficient in terms of effective *simulated LUT per computation steps*. What do I meant by that?
 
@@ -96,7 +96,7 @@ See in particular function `simulCycle_gpu` in source file [`simul_gpu.cc`](src/
 that calls the compute shaders on for each depth levels.
 
 > A detail, not discussed here, is that some LUTs remain constant during simulation
-and can be skipped. This is done in the implementation.
+and can be skipped after initialization. This is done in the implementation.
 
 ### *Refinement 2: fanout and compute lists*
 
