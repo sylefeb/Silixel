@@ -30,34 +30,33 @@ using namespace std;
 // -----------------------------------------------------------------------------
 
 // Propagates depths through the network. Returns whether something changed.
-bool analyzeStep(const vector<t_lut>& luts,int& _swap,vector<int>& _depths)
+bool analyzeStep(const vector<t_lut>& luts,int swap,vector<int>& _depths)
 {
   bool changed = false;
-  int r_off = _swap ? ((int)luts.size()<<1) : 0; // read from offset
-  int w_off = _swap ? 0 : ((int)luts.size()<<1); // write to offset
+  int r_offs = swap ? (int)luts.size() : 0;
+  int w_offs = swap ? 0 : (int)luts.size();
   for (int l=0;l<luts.size();++l) {
-    // copy output depths
-    _depths[w_off + (l<<1) + 0] = _depths[r_off + (l<<1) + 0];
-    _depths[w_off + (l<<1) + 1] = _depths[r_off + (l<<1) + 1];
+    // copy over
+    _depths[w_offs + l] = _depths[r_offs + l];
     // read input depths
     unsigned short cfg_idx = 0;
     int new_value = 0;
     for (int i=0;i<4;++i) {
       if (luts[l].inputs[i] > -1) {
-        int other_value = _depths[r_off + luts[l].inputs[i]];
-        if (other_value < std::numeric_limits<int>::max()) ++other_value;
-        new_value       = max(new_value , other_value);
+
+        int other_value = _depths[ r_offs + (luts[l].inputs[i]>>1) ];
+        if (other_value < std::numeric_limits<int>::max()) {
+          ++other_value;
+        }
+        new_value = max(new_value , other_value);
       }
     }
-    // update D outputs
-    if (_depths[r_off + (l<<1) + 0] != new_value) {
-      _depths[w_off + (l<<1) + 0] = new_value;
+    // update output depth if changed
+    if (_depths[ r_offs + l ] != new_value) {
+      _depths[ w_offs + l ] = new_value;
       changed = true;
     }
-    // flip-flops Q forced to depth zero
-    _depths[w_off + (l<<1) + 1] = 0;
   }
-  _swap = 1 - _swap;
   return changed;
 }
 
@@ -71,18 +70,19 @@ void analyze(const vector<t_lut>& luts,
   vector<int>&      _step_ends,
   vector<uchar>&    _depths)
 {
-  int swap = 0;
-  vector<int> outputs;
-  outputs.resize(luts.size() << 2, // x2 (D,Q), x2 buffers
-                 std::numeric_limits<int>::max());
+  vector<int> lut_depths;
+  lut_depths.resize(luts.size()<<1, // double buffering
+                    std::numeric_limits<int>::max());
   // iterate
   bool changed = true;
+  int swap = 0;
   int maxiter = 256;
   while (changed && maxiter-- > 0) {
-    changed = analyzeStep(luts, swap, outputs);
+    changed = analyzeStep(luts, swap, lut_depths);
+    swap = 1 - swap;
   }
   if (maxiter <= 0) {
-    fprintf(stderr, "cannot perform analysis, loop?");
+    fprintf(stderr, "cannot perform analysis, combinational loop in design?");
     exit(-1);
   }
   // reorder by increasing depth
@@ -90,18 +90,18 @@ void analyze(const vector<t_lut>& luts,
   source.resize(luts.size());
   int max_depth = 0;
   for (int l = 0; l < luts.size(); ++l) {
-    source[l] = make_pair(outputs[(l << 1) + 0], l); // depth,id
-    if (outputs[(l << 1) + 0] < std::numeric_limits<int>::max()) {
-      max_depth = max(max_depth, outputs[(l << 1) + 0]);
+    source[l] = make_pair(lut_depths[l], l); // depth,id
+    if (lut_depths[l] < std::numeric_limits<int>::max()) {
+      max_depth = max(max_depth, lut_depths[l]);
     }
   }
   if (max_depth == 0) {
-    fprintf(stderr, "cannot perform analysis");
+    fprintf(stderr, "analysis failed (why??)");
     exit(-1);
   }
-  /// asjust based on initialization
+  /// adjust based on initialization
   // we can only consider const if the inputs where not initialized, otherwise
-  // there may be a one-purpose cascade of FF from the initialization point
+  // there may be an on-purpose cascade of FF from the initialization point
   set<int> with_init;
   for (auto one : ones) {
     with_init.insert(one);

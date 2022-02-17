@@ -18,26 +18,11 @@ using namespace std;
 
 // -----------------------------------------------------------------------------
 /*
-  Reads the design from a BLIF file
-*/
-void readDesign(
-  vector<t_lut>& _luts,
-  vector<pair<string,int> >& _outbits,
-  vector<int>& _ones)
-{
-  t_blif blif;
-  // parse the blif file
-  parse(SRC_PATH "/build/synth.blif",blif);
-  // build the design datastructure
-  buildSimulData(blif, _luts, _outbits, _ones);
-}
-
-// -----------------------------------------------------------------------------
-/*
   From a read blif file, prepares a data-structure for simulation
   The blif file contains:
   - gates, which are LUT4s
   - latches, which indicate a flip-flop
+
   In most cases, a latch corresponds to the output of a gate, so it is
   simply a matter of connecting to the Q output of the corresponding gate.
   There are cases however where latches are chained. This requires us to
@@ -46,10 +31,10 @@ void readDesign(
   see tag [extra gates] in comments below.
 */
 void buildSimulData(
-  t_blif&                     _blif, // might change
-  vector<t_lut>&              _luts,
-  vector<pair<string, int> >& _outbits,
-  vector<int>&                _ones)
+  t_blif&                     _blif, // might change (adding extra LUTs)
+  vector<t_lut>&              _luts, // output vector of LUTs (see header)
+  vector<pair<string, int> >& _outbits, // output bit indices
+  vector<int>&                _ones) // which output bit start as '1'
 {
   // gather output names and their source gate/latch
   map<string, v2i> output2src;
@@ -170,6 +155,23 @@ void buildSimulData(
       _luts[l].inputs[2], _luts[l].inputs[3]);
   }
 #endif
+}
+
+// -----------------------------------------------------------------------------
+
+/*
+  Reads the design from a BLIF file
+*/
+void readDesign(
+  vector<t_lut>& _luts,
+  vector<pair<string, int> >& _outbits,
+  vector<int>& _ones)
+{
+  t_blif blif;
+  // parse the blif file
+  parse(SRC_PATH "/build/synth.blif", blif);
+  // build the design datastructure
+  buildSimulData(blif, _luts, _outbits, _ones);
 }
 
 // -----------------------------------------------------------------------------
