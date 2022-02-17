@@ -8,8 +8,8 @@ This repository contains my experiments on gate-level simulation. By that I mean
 > **Work in progress**: I am currently working on this README and commenting/cleaning the source code. Feedback is welcome!
 
 <p align="center">
-<img src="silice_vga_test.gif"><br>
 <i>A VGA test design being simulated on the GPU, with gate binary outputs overlaid.</i>
+<img src="silice_vga_test.gif"><br>
 </p>
 
 This all started as I stumbled upon an entry to the Google CTF 2019 contest: [reversing-gpurtl](https://www.youtube.com/watch?v=3ac9HAsfV8c). The source code [is available](https://github.com/google/google-ctf/tree/master/2019/finals/reversing-gpurtl) and shows how to brute force a gate-level simulation onto the GPU.
