@@ -29,22 +29,21 @@ using namespace std;
 
 // -----------------------------------------------------------------------------
 
-// Propagates depths through the network. Returns whether something changed.
-bool analyzeStep(const vector<t_lut>& luts,int swap,vector<int>& _depths)
+// Propagates depths through the network (from all Q at depth 0). 
+// Returns whether something changed.
+bool analyzeStep(const vector<t_lut>& luts,vector<int>& _depths)
 {
   bool changed = false;
-  int r_offs = swap ? (int)luts.size() : 0;
-  int w_offs = swap ? 0 : (int)luts.size();
   for (int l=0;l<luts.size();++l) {
-    // copy over
-    _depths[w_offs + l] = _depths[r_offs + l];
     // read input depths
     unsigned short cfg_idx = 0;
     int new_value = 0;
     for (int i=0;i<4;++i) {
       if (luts[l].inputs[i] > -1) {
-
-        int other_value = _depths[ r_offs + (luts[l].inputs[i]>>1) ];
+        int other_value = 0;
+        if ((luts[l].inputs[i] & 1) == 0) {
+          other_value = _depths[(luts[l].inputs[i] >> 1)];
+        }
         if (other_value < std::numeric_limits<int>::max()) {
           ++other_value;
         }
@@ -52,8 +51,8 @@ bool analyzeStep(const vector<t_lut>& luts,int swap,vector<int>& _depths)
       }
     }
     // update output depth if changed
-    if (_depths[ r_offs + l ] != new_value) {
-      _depths[ w_offs + l ] = new_value;
+    if (_depths[l] != new_value) {
+      _depths[l] = new_value;
       changed = true;
     }
   }
@@ -62,24 +61,21 @@ bool analyzeStep(const vector<t_lut>& luts,int swap,vector<int>& _depths)
 
 // -----------------------------------------------------------------------------
 
-void analyze(const vector<t_lut>& luts,
-  const vector<int>& ones,
-  vector<int>&      _reorder,
-  vector<int>&      _inv_reorder,
+void analyze(
+  vector<t_lut>&    _luts,
+  std::vector<pair<std::string, int> >& _outbits,
+  vector<int>&      _ones,
   vector<int>&      _step_starts,
   vector<int>&      _step_ends,
   vector<uchar>&    _depths)
 {
   vector<int> lut_depths;
-  lut_depths.resize(luts.size()<<1, // double buffering
-                    std::numeric_limits<int>::max());
+  lut_depths.resize(_luts.size(),std::numeric_limits<int>::max());
   // iterate
   bool changed = true;
-  int swap = 0;
   int maxiter = 256;
   while (changed && maxiter-- > 0) {
-    changed = analyzeStep(luts, swap, lut_depths);
-    swap = 1 - swap;
+    changed = analyzeStep(_luts, lut_depths);
   }
   if (maxiter <= 0) {
     fprintf(stderr, "cannot perform analysis, combinational loop in design?");
@@ -87,9 +83,9 @@ void analyze(const vector<t_lut>& luts,
   }
   // reorder by increasing depth
   vector<pair<int, int> > source;
-  source.resize(luts.size());
+  source.resize(_luts.size());
   int max_depth = 0;
-  for (int l = 0; l < luts.size(); ++l) {
+  for (int l = 0; l < _luts.size(); ++l) {
     source[l] = make_pair(lut_depths[l], l); // depth,id
     if (lut_depths[l] < std::numeric_limits<int>::max()) {
       max_depth = max(max_depth, lut_depths[l]);
@@ -103,11 +99,11 @@ void analyze(const vector<t_lut>& luts,
   // we can only consider const if the inputs where not initialized, otherwise
   // there may be an on-purpose cascade of FF from the initialization point
   set<int> with_init;
-  for (auto one : ones) {
+  for (auto one : _ones) {
     with_init.insert(one);
   }
   // promote 0-depth cells with init to 1-depth
-  for (int l = 0; l < luts.size(); ++l) {
+  for (int l = 0; l < _luts.size(); ++l) {
     if (source[l].first == 0) {
       if (with_init.count((l << 1) + 0) || with_init.count((l << 1) + 1)) {
         source[l].first = 1;
@@ -117,12 +113,12 @@ void analyze(const vector<t_lut>& luts,
   }
   // convert d-depth cells using only 0-depth const cells as 0-depth
   for (int depth = 1; depth <= max_depth; depth++) {
-    for (int l = 0; l < luts.size(); ++l) {
+    for (int l = 0; l < _luts.size(); ++l) {
       if (source[l].first == depth) {
         bool no_init_input = true;
         for (int i = 0; i < 4; ++i) {
-          if (luts[l].inputs[i] > -1) {
-            if (with_init.count(luts[l].inputs[i]) != 0) {
+          if (_luts[l].inputs[i] > -1) {
+            if (with_init.count(_luts[l].inputs[i]) != 0) {
               no_init_input = false; break;
             }
           }
@@ -131,8 +127,8 @@ void analyze(const vector<t_lut>& luts,
           // now we check that all inputs are 0-depth
           bool all_inputs_0depth = true;
           for (int i = 0; i < 4; ++i) {
-            if (luts[l].inputs[i] > -1) {
-              int idepth = source[luts[l].inputs[i] >> 1].first;
+            if (_luts[l].inputs[i] > -1) {
+              int idepth = source[_luts[l].inputs[i] >> 1].first;
               if (idepth > 0) {
                 all_inputs_0depth = false;
               }
@@ -160,20 +156,25 @@ void analyze(const vector<t_lut>& luts,
 
   sort(source.begin(),source.end());
 
-  _reorder    .resize(luts.size());
-  _inv_reorder.resize(luts.size());
-  _depths     .resize(luts.size());
+  vector<int> reorder;
+  vector<int> inv_reorder;
+  reorder     .resize(_luts.size());
+  inv_reorder .resize(_luts.size());
+  _depths     .resize(_luts.size());
   _step_starts.resize(max_depth+1,std::numeric_limits<int>::max());
 	_step_ends  .resize(max_depth+1,0);
-  for (int o=0;o<_reorder.size();++o) {
-    _reorder[o]                    = source[o].second;
-    _inv_reorder[source[o].second] = o;
-    _depths[o]                     = source[o].first;
+  for (int o=0;o<reorder.size();++o) {
+    reorder[o]                    = source[o].second;
+    inv_reorder[source[o].second] = o;
+    _depths[o]                    = source[o].first;
     if (source[o].first < std::numeric_limits<int>::max()) {
       _step_starts[source[o].first] = min(_step_starts[source[o].first],o);
       _step_ends  [source[o].first] = max(_step_ends  [source[o].first],o);
     }
   }
+
+  vector<t_lut> init_luts = _luts;
+  reorderLUTs(init_luts, reorder, inv_reorder, _luts, _outbits, _ones);
 
   // debug
   fprintf(stderr,"analysis done\n");
@@ -182,7 +183,7 @@ void analyze(const vector<t_lut>& luts,
     fprintf(stderr,"depth %3d on luts %6d-%6d (%6d/%6d)\n",
       d,_step_starts[d],_step_ends[d],
       _step_ends[d] - _step_starts[d] + 1,
-      (int)luts.size());
+      (int)_luts.size());
   }
 }
 

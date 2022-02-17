@@ -329,15 +329,10 @@ int main(int argc, char **argv)
     g_GPU_timer.init();
 
     /// load up design
-    vector<t_lut> init_luts;
     vector<pair<string,int> > outbits;
-    readDesign(init_luts, outbits, g_ones);
+    readDesign(g_luts, outbits, g_ones);
 
-    vector<int>   reorder;
-    vector<int>   inv_reorder;
-    analyze(init_luts, g_ones, reorder, inv_reorder, g_step_starts, g_step_ends, g_cpu_depths);
-
-    reorderLUTs(init_luts, reorder, inv_reorder, g_luts, outbits, g_ones);
+    analyze(g_luts, outbits, g_ones, g_step_starts, g_step_ends, g_cpu_depths);
 
     buildFanout(g_luts, g_cpu_fanout);
 

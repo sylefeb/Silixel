@@ -48,20 +48,15 @@ const char *c_ClockAnim[] = {
 int main(int argc,char **argv)
 {
   /// load up design
-  vector<t_lut> init_luts;
+  vector<t_lut> luts;
   vector<pair<string,int> > outbits;
   vector<int>   ones;
-  readDesign(init_luts, outbits, ones);
+  readDesign(luts, outbits, ones);
 
-  vector<int>   reorder;
-  vector<int>   inv_reorder;
   vector<int>   step_starts;
   vector<int>   step_ends;
   vector<uchar> depths;
-  analyze(init_luts, ones, reorder, inv_reorder, step_starts, step_ends, depths);
-
-  vector<t_lut> luts;
-  reorderLUTs(init_luts, reorder, inv_reorder, luts, outbits, ones);
+  analyze(luts, outbits, ones, step_starts, step_ends, depths);
 
   vector<int>   fanout;
   buildFanout(luts, fanout);
