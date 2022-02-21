@@ -1,4 +1,11 @@
 // @sylefeb 2022-01-04
+/* ---------------------------------------------------------------------
+
+Main file, creates a small graphical GUI (OpenGL+ImGUI) around a 
+simulated design. If the design has VGA signals, displays the result 
+using a texture. Allows to select between GPU/CPU simulation.
+
+ ----------------------------------------------------------------------- */
 /*
 BSD 3-Clause License
 

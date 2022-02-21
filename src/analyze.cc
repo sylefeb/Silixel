@@ -1,5 +1,5 @@
 // @sylefeb 2022-01-04
-/*
+/* ---------------------------------------------------------------------
 
 Analyzes the design, determines the 'depth' of each LUT by propagating
 from the Q outputs (depth 0). The LUT depth is 1 + the max of its input depths.
@@ -8,7 +8,7 @@ Within a clock cycle:
 - LUTs at a same depth are not influenced by each others.
 The LUTs are then sorted by depth and the data structure reordered.
 
-*/
+ ----------------------------------------------------------------------- */
 /*
 BSD 3-Clause License
 
@@ -92,6 +92,8 @@ bool analyzeStep(const vector<t_lut>& luts,vector<int>& _depths)
 
 // -----------------------------------------------------------------------------
 
+// Performs an analysis of the design, computing the combinational depth
+// of all LUTs
 void analyze(
   vector<t_lut>&    _luts,
   std::vector<pair<std::string, int> >& _outbits,
@@ -102,9 +104,10 @@ void analyze(
 {
   vector<int> lut_depths;
   lut_depths.resize(_luts.size(),std::numeric_limits<int>::max());
-  // iterate
+  /// iterate the analysis step
+  // propagates combinational depth from Q outputs
   bool changed = true;
-  int maxiter = 256;
+  int maxiter = 1024;
   while (changed && maxiter-- > 0) {
     changed = analyzeStep(_luts, lut_depths);
   }
@@ -126,14 +129,15 @@ void analyze(
     fprintf(stderr, "analysis failed (why??)");
     exit(-1);
   }
-  /// adjust based on initialization
+  /// determine const LUTs based on initialization
+  // const LUTs are placed at depth 0, which is not simulated
   // we can only consider const if the inputs where not initialized, otherwise
   // there may be an on-purpose cascade of FF from the initialization point
   set<int> with_init;
   for (auto one : _ones) {
     with_init.insert(one);
   }
-  // promote 0-depth cells with init to 1-depth
+  // promote 0-depth cells with init to 1-depth (non const)
   for (int l = 0; l < _luts.size(); ++l) {
     if (source[l].first == 0) {
       if (with_init.count((l << 1) + 0) || with_init.count((l << 1) + 1)) {
@@ -142,7 +146,7 @@ void analyze(
       }
     }
   }
-  // convert d-depth cells using only 0-depth const cells as 0-depth
+  // convert d-depth cells using only 0-depth const cells as 0-depth (const)
   for (int depth = 1; depth <= max_depth; depth++) {
     for (int l = 0; l < _luts.size(); ++l) {
       if (source[l].first == depth) {
@@ -184,9 +188,9 @@ void analyze(
       l, source[l].first, min(min(i0d, i1d), min(i2d, i3d)));
   }
 #endif
-
+  // sort by depth
   sort(source.begin(),source.end());
-
+  // build the reordering arrays
   vector<int> reorder;
   vector<int> inv_reorder;
   reorder     .resize(_luts.size());
@@ -203,13 +207,11 @@ void analyze(
       _step_ends  [source[o].first] = max(_step_ends  [source[o].first],o);
     }
   }
-
+  // reorder the LUTs
   vector<t_lut> init_luts = _luts;
   reorderLUTs(init_luts, reorder, inv_reorder, _luts, _outbits, _ones);
-
-  // debug
+  // print report
   fprintf(stderr,"analysis done\n");
-
   for (int d=0;d<_step_starts.size();++d) {
     fprintf(stderr,"depth %3d on luts %6d-%6d (%6d/%6d)\n",
       d,_step_starts[d],_step_ends[d],
@@ -220,6 +222,7 @@ void analyze(
 
 // -----------------------------------------------------------------------------
 
+// Reorders the LUT datastructure based on input reordering arrays
 void reorderLUTs(
   const vector<t_lut>&       init_luts,
   const vector<int>&         reorder,
@@ -260,11 +263,10 @@ void reorderLUTs(
 
 // -----------------------------------------------------------------------------
 
-/*
-Builds a data-structure representing the fanout of each LUT: the list
-of LUTs that use it as an input. This is used to only simulate the LUTs
-which inputs have changed at each depth.
-*/
+
+// Builds a data-structure representing the fanout of each LUT: the list
+// of LUTs that use it as an input. This is used to only simulate the LUTs
+// which inputs have changed at each depth.
 void buildFanout(
   vector<t_lut>&             _luts,
   vector<int>&               _fanout)
