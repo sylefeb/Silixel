@@ -32,6 +32,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 // --------------------------------------------------------------
 
+#include <LibSL.h>
+
 #include <cstdlib>
 #include <cstdio>
 #include <vector>
@@ -44,7 +46,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 using namespace std;
 
 #include "simul_cpu.h"
-#include <LibSL.h>
 
 // -----------------------------------------------------------------------------
 
