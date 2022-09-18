@@ -44,12 +44,14 @@ void main()
   if (gl_GlobalInvocationID.x < num)
   {
     uint lut_id = gl_GlobalInvocationID.x;
-    // update Q output from D
+    // update Q output from D, but only if their values differ.
     uint outv = outputs[lut_id];
-    if ((outv & 1u) == 1u) {
-      outputs[lut_id] = 3u;
-    } else {
-      outputs[lut_id] = 0u;
+    if ((outv & 1) != ((outv>>1)&1)){
+      if ((outv & 1u) == 1u) {
+        outputs[lut_id] = 3u;
+      } else {
+        outputs[lut_id] = 0u;
+      }
     }
   }
 }
