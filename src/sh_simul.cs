@@ -60,10 +60,18 @@ void main()
     uint i2 = get_output(a.z);
     uint i3 = get_output(a.w);
     uint sh = i3 | (i2 << 1) | (i1 << 2) | (i0 << 3);
-    if (((C >> sh) & 1u) == 1u) {
-      atomicOr (outputs[lut_id], 0x00000001u);
-    } else {
-      atomicAnd(outputs[lut_id], 0xfffffffeu);
+
+    uint outv = outputs[lut_id];
+    uint old_d = outv & 1u;
+    uint new_d = (C >> sh) & 1u;
+
+    if (old_d != new_d) {
+      if (new_d == 1u){
+        outputs[lut_id] = outv | 1u;
+      }
+      else{
+        outputs[lut_id] = outv & 0xfffffffeu;
+      }
     }
   }
 }
