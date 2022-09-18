@@ -60,16 +60,15 @@ void main()
     uint i2 = get_output(a.z);
     uint i3 = get_output(a.w);
     uint sh = i3 | (i2 << 1) | (i1 << 2) | (i0 << 3);
-
-    uint outv = outputs[lut_id];
+    // get previous value, compute old/new
+    uint outv  = outputs[lut_id];
     uint old_d = outv & 1u;
     uint new_d = (C >> sh) & 1u;
-
+    // if different, assign
     if (old_d != new_d) {
-      if (new_d == 1u){
+      if (new_d == 1u) {
         outputs[lut_id] = outv | 1u;
-      }
-      else{
+      } else {
         outputs[lut_id] = outv & 0xfffffffeu;
       }
     }
