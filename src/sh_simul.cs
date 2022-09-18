@@ -65,8 +65,7 @@ void main()
     uint old_d = outv & 1u;
     uint new_d = (C >> sh) & 1u;
 
-    if (old_d != new_d)
-    {
+    if (old_d != new_d) {
       if (new_d == 1u){
         outputs[lut_id] = outv | 1u;
       }
