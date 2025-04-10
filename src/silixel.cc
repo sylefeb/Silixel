@@ -326,7 +326,7 @@ void mainRender()
   }
   ImGui::End();
 
-  ImGui::Render();
+  SimpleUI::renderImGui();
 }
 
 /* -------------------------------------------------------- */
