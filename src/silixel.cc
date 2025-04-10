@@ -80,6 +80,8 @@ int              g_Cycle = 0;
 vector<int>      g_step_starts;
 vector<int>      g_step_ends;
 vector<t_lut>    g_luts;
+vector<t_bram>   g_brams;
+map<string,int>  g_indices;
 vector<int>      g_ones;
 vector<int>      g_cpu_fanout;
 vector<uchar>    g_cpu_depths;
@@ -229,7 +231,7 @@ void simulCPU()
     int num_measures = 0;
     Elapsed el;
     while (num_measures++ < 100) {
-      simulCycle_cpu(g_luts, g_cpu_depths, g_step_starts, g_step_ends, g_cpu_fanout, g_cpu_computelists, g_cpu_outputs);
+      simulCycle_cpu(g_luts, g_brams, g_cpu_depths, g_step_starts, g_step_ends, g_cpu_fanout, g_cpu_computelists, g_cpu_outputs);
       simulPosEdge_cpu(g_luts, g_cpu_depths, (int)g_step_starts.size(), g_cpu_fanout, g_cpu_computelists, g_cpu_outputs);
       int vs = simulCPU_output("out_video_vs");
       int hs = simulCPU_output("out_video_hs");
@@ -253,7 +255,7 @@ void simulCPU()
   } else {
     // step
     Elapsed el;
-    simulCycle_cpu(g_luts, g_cpu_depths, g_step_starts, g_step_ends, g_cpu_fanout, g_cpu_computelists, g_cpu_outputs);
+    simulCycle_cpu(g_luts, g_brams, g_cpu_depths, g_step_starts, g_step_ends, g_cpu_fanout, g_cpu_computelists, g_cpu_outputs);
     simulPosEdge_cpu(g_luts, g_cpu_depths, (int)g_step_starts.size(), g_cpu_fanout, g_cpu_computelists, g_cpu_outputs);
     auto ms = el.elapsed();
     if (ms > 0) {
@@ -368,9 +370,9 @@ int main(int argc, char **argv)
 
     /// load up design
     vector<pair<string,int> > outbits;
-    readDesign(g_luts, outbits, g_ones);
+    readDesign(g_luts, g_brams, outbits, g_ones, g_indices);
 
-    analyze(g_luts, outbits, g_ones, g_step_starts, g_step_ends, g_cpu_depths);
+    analyze(g_luts, g_brams, outbits, g_indices, g_ones, g_step_starts, g_step_ends, g_cpu_depths);
 
     buildFanout(g_luts, g_cpu_fanout);
 
@@ -384,7 +386,7 @@ int main(int argc, char **argv)
     simulInit_gpu(g_luts, g_ones);
 
     // init CPU simulation
-    simulInit_cpu(g_luts, g_step_starts, g_step_ends, g_ones, g_cpu_computelists, g_cpu_outputs);
+    simulInit_cpu(g_luts, g_brams, g_step_starts, g_step_ends, g_ones, g_cpu_computelists, g_cpu_outputs);
 
     /// Quick benchmarking at startup
 #if 1
@@ -415,7 +417,7 @@ int main(int argc, char **argv)
         Elapsed el;
         int n_cycles = 1000;
         ForIndex(cy, n_cycles) {
-          simulCycle_cpu(g_luts, g_cpu_depths, g_step_starts, g_step_ends, g_cpu_fanout, g_cpu_computelists, g_cpu_outputs);
+          simulCycle_cpu(g_luts, g_brams, g_cpu_depths, g_step_starts, g_step_ends, g_cpu_fanout, g_cpu_computelists, g_cpu_outputs);
           simulPosEdge_cpu(g_luts, g_cpu_depths, (int)g_step_starts.size(), g_cpu_fanout, g_cpu_computelists, g_cpu_outputs);
         }
         auto ms = el.elapsed();

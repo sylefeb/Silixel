@@ -74,4 +74,4 @@ void readDesign(
   std::vector<t_bram>&                      _brams,
   std::vector<std::pair<std::string,int> >& _outbits,
   std::vector<int>&                         _ones,
-  std::map<string, int>&                    _indices);
+  std::map<std::string, int>&               _indices);
