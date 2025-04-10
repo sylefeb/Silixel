@@ -65,9 +65,9 @@ static inline void simulLUT_cpu(
   unsigned short cfg_idx = 0;
   for (int i = 0; i < 4; ++i) {
     if (luts[l].inputs[i] > -1) {
-      int lut = luts[l].inputs[i] >> 1;
+      int lut      = luts[l].inputs[i] >> 1;
       int q_else_d = luts[l].inputs[i] & 1;
-      uchar bit = (_outputs[lut] >> q_else_d) & 1;
+      uchar bit    = (_outputs[lut] >> q_else_d) & 1;
       cfg_idx |= bit ? (1 << (3 - i)) : 0;
     }
   }
@@ -119,6 +119,10 @@ static inline void simulLUT_cpu(
   vector<int>&         _computelists,
   vector<uchar>&       _outputs)
 {
+  // skip externals
+  if (luts[l].external) {
+    return;
+  }
   // read inputs
   unsigned short cfg_idx = 0;
   for (int i = 0; i < 4; ++i) {
@@ -403,15 +407,14 @@ void simulSetSignal_cpu(
 ) {
   int  b        = sig;
   int  lut      = b >> 1;
-  int  q_else_d = b & 1;
+  // set D
   if (v) {
-    _outputs[lut] |=  0b11;
+    _outputs[lut] |=  1;
   } else {
-    _outputs[lut] &= ~0b11;
+    _outputs[lut] &= ~1;
   }
   // add fanout to compute list
   addFanout(lut, 0, depths, numdepths, fanout, _computelists, _outputs);
-  addFanout(lut, 1, depths, numdepths, fanout, _computelists, _outputs);
 }
 
 // -----------------------------------------------------------------------------

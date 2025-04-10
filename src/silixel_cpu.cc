@@ -107,6 +107,9 @@ int main(int argc,char **argv)
   vector<int>   fanout;
   buildFanout(luts, fanout);
 
+  /// add reset to init to ones
+  // ones.push_back(indices.at("reset"));
+
   /// simulate
   vector<uchar> outputs;
   vector<int>   computelists;
@@ -133,7 +136,6 @@ int main(int argc,char **argv)
     // add_watch("_q__idx_fsm0[" + std::to_string(i) + "]", indices, watches);
   }
   // add_watch("reset", indices, watches);
-  // add_watch("_autorun", indices, watches);
 
   //LibSL::CppHelpers::Console::clear();
 
@@ -148,7 +150,7 @@ int main(int argc,char **argv)
     int lut      = b >> 1;
     int q_else_d = b & 1;
     int bit      = (outputs[lut] >> q_else_d) & 1;
-    fprintf(stderr, "%s\t%d\n", w.first.c_str(), bit);
+    fprintf(stderr, "(%d) %s\t%d\n", b, w.first.c_str(), bit);
   }
 
   //LibSL::CppHelpers::Console::popCursor();
@@ -158,11 +160,10 @@ int main(int argc,char **argv)
   while (1) {
 
     if (cycles < 16) {
-      simulSetSignal_cpu(indices.at("reset"), true, depths, (int)step_starts.size(), fanout, computelists, outputs);
+      //simulSetSignal_cpu(indices.at("reset"), true, depths, (int)step_starts.size(), fanout, computelists, outputs);
       fprintf(stderr, "R ");
     } else if (cycles == 16) {
-      simulSetSignal_cpu(indices.at("reset"), false, depths, (int)step_starts.size(), fanout, computelists, outputs);
-      fprintf(stderr, "  ");
+      //simulSetSignal_cpu(indices.at("reset"), false, depths, (int)step_starts.size(), fanout, computelists, outputs);
     }
 
     simulCycle_cpu(luts, brams, depths, step_starts, step_ends, fanout, computelists, outputs);

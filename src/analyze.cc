@@ -247,7 +247,9 @@ void reorderLUTs(
   _luts.resize(init_luts.size());
   for (int o=0;o<reorder.size();++o) {
     int l        = reorder[o];
-    _luts[o].cfg = init_luts[l].cfg;
+    // NOTE: each individual field of t_lut has to be copied over!
+    _luts[o].cfg      = init_luts[l].cfg;
+    _luts[o].external = init_luts[l].external;
     for (int i = 0; i < 4 ; ++i) {
       if (init_luts[l].inputs[i] > -1) {
         int reg = init_luts[l].inputs[i] &1;
