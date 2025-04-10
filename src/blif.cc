@@ -101,11 +101,25 @@ ushort lut_config(const std::vector<std::pair<std::string, std::string> >& confi
 
 // -------------------------------------------------------------------
 
+void split(const std::string& s, char delim, std::vector<std::string>& elems)
+{
+  std::stringstream ss(s);
+  std::string item;
+  while (getline(ss, item, delim)) {
+    elems.push_back(item);
+  }
+}
+
+// -------------------------------------------------------------------
+
 void parse(const char *fname, t_blif& _blif)
 {
 
   LibSL::BasicParser::FileStream stream(fname);
   LibSL::BasicParser::Parser<LibSL::BasicParser::FileStream> parser(stream,false);
+
+  bool in_subckt = false;
+  bool in_bram = false;
 
   fprintf(stderr, " Parsing ... ");
   Console::processingInit();
@@ -117,12 +131,16 @@ void parse(const char *fname, t_blif& _blif)
     } else if (first == '.') {
       string type = parser.readString();
       if (type == ".model") {
+        in_subckt = false;
         string name = parser.readString();
       } else if (type == ".inputs") {
+        in_subckt = false;
         readList(parser, _blif.inputs);
       } else if (type == ".outputs") {
+        in_subckt = false;
         readList(parser, _blif.outputs);
       } else if (type == ".names") {
+        in_subckt = false;
         vector<string> ios;
         readList(parser, ios);
         _blif.gates.push_back(t_gate_nfo());
@@ -133,6 +151,7 @@ void parse(const char *fname, t_blif& _blif)
           }
         }
       } else if (type == ".latch") {
+        in_subckt = false;
         _blif.latches.push_back(t_latch_nfo());
         vector<string> nfos;
         readList(parser, nfos);
@@ -140,6 +159,77 @@ void parse(const char *fname, t_blif& _blif)
         _blif.latches.back().input  = nfos[0];
         _blif.latches.back().output = nfos[1];
         _blif.latches.back().init = nfos[4];
+      } else if (type == ".subckt") {
+        in_subckt = true;
+        in_bram = false;
+        string type = parser.readString();
+        if (type == "$mem_v2") {
+          in_bram = true;
+          _blif.brams.push_back(t_bram_nfo());
+          vector<string> bindings;
+          readList(parser, bindings);
+          for (auto b : bindings) {
+            std::vector<std::string> left_right;
+            split(b,'=',left_right);
+            if (left_right.size() != 2) {
+              fprintf(stderr,"<warning> cannot interpret binding %s\n",b.c_str());
+            } else {
+              _blif.brams.back().bindings[left_right[0]] = left_right[1];
+              // fprintf(stderr,"%s  =  %s\n",left_right[0].c_str(),left_right[1].c_str());
+            }
+          }
+        }
+      } else if (type == ".param") {
+        if (in_subckt && in_bram) {
+          string param;
+          param = parser.readString();
+          if (param == "MEMID") {
+            string id;
+            id = parser.readString();
+            _blif.brams.back().name = id;
+          } else if (param == "INIT") {
+            // read init bits and store
+            parser.skipSpaces();
+            uint b = 0;
+            while (1) {
+              char next = parser.readChar(false);
+              if (next == '\n') {
+                break;
+              } else {
+                char bit = parser.readChar(true);
+                _blif.brams.back().data.set(b, (bit == '1'));
+                ++b;
+              }
+            }
+            fprintf(stderr, "read %d init bits\n", _blif.brams.back().data.bitsize());
+          } else {
+            // read value (max 32 bits)
+            uint32_t v = 0;
+            parser.skipSpaces();
+            while (1) {
+              char next = parser.readChar(false);
+              if (next == '\n') {
+                break;
+              } else {
+                char bit = parser.readChar(true);
+                if (bit == '1') {
+                  v = (v << 1) | 1;
+                } else {
+                  v = v << 1;
+                }
+              }
+            }
+            if (param == "ABITS") {
+              _blif.brams.back().addr_width = v;
+            } else if (param == "SIZE") {
+              _blif.brams.back().size = v;
+            } else if (param == "WIDTH") {
+              _blif.brams.back().data_width = v;
+            } else {
+              // TODO: check num ports, etc
+            }
+          }
+        }
       }
     } else if (first == '0' || first == '1' || first == '-') {
       // read configuration

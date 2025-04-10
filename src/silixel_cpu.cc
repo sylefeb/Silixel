@@ -49,6 +49,18 @@ using namespace std;
 
 // -----------------------------------------------------------------------------
 
+void add_watch(string signal, const map<string, int>& indices, vector<pair<string, int> > &_watches)
+{
+  auto I = indices.find(signal);
+  if (I == indices.end()) {
+    fprintf(stderr, "<error> cannot find signal '%s' to watch\n", signal.c_str());
+    exit (-1);
+  }
+  _watches.push_back(make_pair(signal, I->second));
+}
+
+// -----------------------------------------------------------------------------
+
 const char *c_ClockAnim[] = {
 "       _____  \n",
 " _____/     \\  ",
@@ -80,15 +92,17 @@ const char *c_ClockAnim[] = {
 int main(int argc,char **argv)
 {
   /// load up design
-  vector<t_lut> luts;
+  vector<t_lut>             luts;
+  std::vector<t_bram>       brams;
   vector<pair<string,int> > outbits;
-  vector<int>   ones;
-  readDesign(luts, outbits, ones);
+  vector<int>               ones;
+  map<string, int>          indices;
+  readDesign(luts, brams, outbits, ones, indices);
 
   vector<int>   step_starts;
   vector<int>   step_ends;
   vector<uchar> depths;
-  analyze(luts, outbits, ones, step_starts, step_ends, depths);
+  analyze(luts, brams, outbits, indices, ones, step_starts, step_ends, depths);
 
   vector<int>   fanout;
   buildFanout(luts, fanout);
@@ -96,31 +110,80 @@ int main(int argc,char **argv)
   /// simulate
   vector<uchar> outputs;
   vector<int>   computelists;
-  simulInit_cpu(luts, step_starts, step_ends, ones, computelists, outputs);
+  simulInit_cpu(luts, brams, step_starts, step_ends, ones, computelists, outputs);
 
-  LibSL::CppHelpers::Console::clear();
+  vector<pair<string, int> > watches;
+  ForIndex(i, 12) {
+    // add_watch("__main._w_cpu_mem_addr[" + std::to_string(i) + "]", indices, watches);
+  }
+  ForIndex(i, 32) {
+    // add_watch("__main.cpu.exec.in_instr[" + std::to_string(0 + i) + "]", indices, watches);
+  }
+  ForIndex(i, 4) {
+    // add_watch("__mem__ram.out_rdata[" + std::to_string(i) + "]", indices, watches);
+  }
+  ForIndex(i, 12) {
+     // add_watch("__main.cpu._q_pc[" + std::to_string(i) + "]", indices, watches);
+  }
+  ForIndex(i, 5) {
+    // add_watch("__main.out_leds[" + std::to_string(i) + "]", indices, watches);
+  }
+  // add_watch("__main.cpu.exec.out_no_rd", indices, watches);
+  ForIndex(i, 3) {
+    // add_watch("_q__idx_fsm0[" + std::to_string(i) + "]", indices, watches);
+  }
+  // add_watch("reset", indices, watches);
+  // add_watch("_autorun", indices, watches);
 
-  LibSL::CppHelpers::Console::pushCursor();
+  //LibSL::CppHelpers::Console::clear();
+
+  //LibSL::CppHelpers::Console::pushCursor();
   fprintf(stderr, "       _____\n");
   fprintf(stderr, " init_/       ");
   simulPrintOutput_cpu(outputs, outbits);
 
-  LibSL::CppHelpers::Console::popCursor();
-  LibSL::CppHelpers::Console::pushCursor();
+  // print watches
+  for (auto w : watches) {
+    int b        = w.second;
+    int lut      = b >> 1;
+    int q_else_d = b & 1;
+    int bit      = (outputs[lut] >> q_else_d) & 1;
+    fprintf(stderr, "%s\t%d\n", w.first.c_str(), bit);
+  }
+
+  //LibSL::CppHelpers::Console::popCursor();
+  //LibSL::CppHelpers::Console::pushCursor();
 
   int cycles = 0;
   while (1) {
 
-    simulCycle_cpu(luts, depths, step_starts, step_ends, fanout, computelists, outputs);
+    if (cycles < 16) {
+      simulSetSignal_cpu(indices.at("reset"), true, depths, (int)step_starts.size(), fanout, computelists, outputs);
+      fprintf(stderr, "R ");
+    } else if (cycles == 16) {
+      simulSetSignal_cpu(indices.at("reset"), false, depths, (int)step_starts.size(), fanout, computelists, outputs);
+      fprintf(stderr, "  ");
+    }
+
+    simulCycle_cpu(luts, brams, depths, step_starts, step_ends, fanout, computelists, outputs);
     simulPosEdge_cpu(luts, depths, (int)step_starts.size(), fanout, computelists, outputs);
 
-    LibSL::CppHelpers::Console::popCursor();
-    LibSL::CppHelpers::Console::pushCursor();
+//    LibSL::CppHelpers::Console::popCursor();
+//    LibSL::CppHelpers::Console::pushCursor();
 
     int a = (cycles/3) % 12;
     fprintf(stderr, c_ClockAnim[a * 2 + 0]);
     fprintf(stderr, c_ClockAnim[a * 2 + 1]);
     simulPrintOutput_cpu(outputs, outbits);
+
+    // print watches
+    for (auto w : watches) {
+      int b        = w.second;
+      int lut      = b >> 1;
+      int q_else_d = b & 1;
+      int bit      = (outputs[lut] >> q_else_d) & 1;
+      fprintf(stderr, "(%d) %s\t%d\n", b,w.first.c_str(), bit);
+    }
 
     ++cycles;
     // Sleep(500); /// slow down on purpose

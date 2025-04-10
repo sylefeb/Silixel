@@ -134,6 +134,7 @@ static inline void simulLUT_cpu(
   if ((_outputs[l]&1) != new_value) {
     if (new_value) _outputs[l] |=  1;
     else           _outputs[l] &= ~1;
+    // fprintf(stderr, "LUT %d changed (new:%d)\n",l<<1,new_value);
     // add fanout to compute list
     addFanout(l, 0, depths, numdepths, fanout, _computelists, _outputs);
     // add this LUT to posedge list
@@ -152,13 +153,86 @@ static inline void simulLUT_cpu(
 
 // -----------------------------------------------------------------------------
 
-void simulInit_cpu(
-  const vector<t_lut>& luts,
-  const vector<int>&   step_starts,
-  const vector<int>&   step_ends,
-  const vector<int>&   ones,
+void simulBRAMS_cpu(
+  vector<t_bram>&     _brams,
+  const vector<uchar>& depths,
+  int                  numdepths,
+  const vector<int>&   fanout,
   vector<int>&        _computelists,
   vector<uchar>&      _outputs)
+{
+  // process BRAMs
+  for (auto &bram : _brams) {
+    // make rd_addr
+    uint rd_addr = 0;
+    for (int i=0;i < bram.rd_addr.size();++i) {
+      int b        = bram.rd_addr[i];
+      int lut      = b >> 1;
+      int q_else_d = b & 1;
+      uint bit     = ((_outputs[lut] >> q_else_d) & 1) ? 1 : 0;
+      rd_addr      = rd_addr | (bit << i);
+    }
+    // DEBUG
+    uint32_t dbg_rdata = 0;
+    uint32_t dbg_wdata = 0;
+    uint32_t dbg_wen   = 0;
+    for (int i=0;i < bram.rd_data.size();++i) {
+      int  o    = bram.data.bitsize() - (int)(rd_addr * bram.rd_data.size());
+      bool bitr = bram.data.get(o - 1 - i);
+      dbg_rdata = dbg_rdata | ((bitr?1:0) << i);
+      if (!bram.wr_data.empty()) {
+        int  bw    = bram.wr_data[i];
+        uint bit_w = (_outputs[bw >> 1] >> (bw & 1)) & 1;
+        dbg_wdata  = dbg_wdata | ((bit_w?1:0) << i);
+        int  be    = bram.wr_en[i];
+        uint bit_e = (_outputs[be >> 1] >> (be & 1)) & 1;
+        dbg_wen    = dbg_wen | ((bit_e?1:0) << i);
+      }
+    }
+    // fetch and set rd_data
+    for (int i=0;i < bram.rd_data.size();++i) {
+      int  o        = bram.data.bitsize() - (int)(rd_addr * bram.rd_data.size());
+      bool bit      = bram.data.get(o - 1 - i);
+      int  b        = bram.rd_data[i];
+      int  lut      = b >> 1;
+      int  q_else_d = b & 1;
+      if (bit) {
+        _outputs[lut] |=  0b11;
+      } else {
+        _outputs[lut] &= ~0b11;
+      }
+      // add fanout to compute list
+      addFanout(lut, 0, depths, numdepths, fanout, _computelists, _outputs);
+      addFanout(lut, 1, depths, numdepths, fanout, _computelists, _outputs);
+    }
+    // get wr_data and store
+    if (!bram.wr_data.empty()) {
+      for (int i=0;i < bram.rd_data.size();++i) {
+        int  o        = bram.data.bitsize() - (int)(rd_addr * bram.rd_data.size());
+        int  bw       = bram.wr_data[i];
+        uint bit_w    = (_outputs[bw >> 1] >> (bw & 1)) & 1;
+        int  be       = bram.wr_en[i];
+        uint bit_e    = (_outputs[be >> 1] >> (be & 1)) & 1;
+        if (bit_e) {
+          bram.data.set(o - 1 - i, bit_w != 0);
+        }
+      }
+    }
+    // report
+    fprintf(stderr, "- bram %s @%08x = %08x w:%08x(%08x)\n", bram.name.c_str(), rd_addr, dbg_rdata, dbg_wdata, dbg_wen);
+  }
+}
+
+// -----------------------------------------------------------------------------
+
+void simulInit_cpu(
+  const vector<t_lut>&   luts,
+  vector<t_bram>&       _brams,
+  const vector<int>&     step_starts,
+  const vector<int>&     step_ends,
+  const vector<int>&     ones,
+  vector<int>&          _computelists,
+  vector<uchar>&        _outputs)
 {
   _outputs.resize(luts.size(),0);
   // initialize ones
@@ -219,16 +293,19 @@ void simulInit_cpu(
 // -----------------------------------------------------------------------------
 
 void simulCycle_cpu(
-  const vector<t_lut>& luts,
-  const vector<uchar>& depths,
-	const vector<int>&   step_starts,
-	const vector<int>&   step_ends,
-  const vector<int>&   fanout,
-  vector<int>&        _computelists,
-	vector<uchar>&      _outputs)
+  const vector<t_lut>&   luts,
+  vector<t_bram>&       _brams,
+  const vector<uchar>&   depths,
+	const vector<int>&     step_starts,
+	const vector<int>&     step_ends,
+  const vector<int>&     fanout,
+  vector<int>&          _computelists,
+	vector<uchar>&        _outputs)
 {
+  // BRAMs
+  simulBRAMS_cpu(_brams, depths, (int)step_starts.size(), fanout, _computelists, _outputs);
+  // process LUTs
   for (int depth = 0; depth < step_starts.size(); ++depth) {
-    // process LUTs
     int cls = _computelists[depth];
     int num = _computelists[cls];
     // cerr << sprint("depth: %5d, num: %5d\n", depth, num);
@@ -311,6 +388,30 @@ void simulPrintOutput_cpu(
     val += bit << b;
   }
   fprintf(stderr,"b%s (d%03d h%03x)   \n",str.c_str(),val,val);
+}
+
+// -----------------------------------------------------------------------------
+
+void simulSetSignal_cpu(
+  int                      sig, 
+  bool                     v, 
+  const vector<uchar>&     depths,
+  int                      numdepths,
+  const vector<int>&       fanout,
+  vector<int>&             _computelists,
+  vector<uchar>&           _outputs
+) {
+  int  b        = sig;
+  int  lut      = b >> 1;
+  int  q_else_d = b & 1;
+  if (v) {
+    _outputs[lut] |=  0b11;
+  } else {
+    _outputs[lut] &= ~0b11;
+  }
+  // add fanout to compute list
+  addFanout(lut, 0, depths, numdepths, fanout, _computelists, _outputs);
+  addFanout(lut, 1, depths, numdepths, fanout, _computelists, _outputs);
 }
 
 // -----------------------------------------------------------------------------

@@ -38,6 +38,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <vector>
 #include <string>
 
+#include "uintX.h"
+
 typedef struct {
   std::string input;
   std::string output;
@@ -51,10 +53,20 @@ typedef struct {
 } t_gate_nfo;
 
 typedef struct {
+  std::map<std::string,std::string> bindings;
+  std::string name;
+  int   size;
+  int   addr_width;
+  int   data_width;
+  uintX data;
+} t_bram_nfo;
+
+typedef struct {
   std::vector<std::string> inputs;
   std::vector<std::string> outputs;
   std::vector<t_latch_nfo> latches;
   std::vector<t_gate_nfo>  gates;
+  std::vector<t_bram_nfo>  brams;
 } t_blif;
 
 void   parse(const char *fname, t_blif& _blif);

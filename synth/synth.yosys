@@ -28,7 +28,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-read_verilog ../build/synth.v
+read_verilog -sv ../build/synth.v
 
 techmap -map +/adff2dff.v
 
@@ -65,4 +65,4 @@ hierarchy -check
 stat
 check
 
-write_blif ../build/synth.blif
+write_blif -param ../build/synth.blif

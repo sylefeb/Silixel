@@ -170,3 +170,8 @@ After running `./build/src/silixel` you should see this:
 
 Time to experiment, the source code is yours to hack!
 Please let me know what you thought, and feel free to [reach out on Twitter](https://twitter.com/sylefeb/).
+
+## Limitations
+
+- Single clock domain
+

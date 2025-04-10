@@ -1,4 +1,4 @@
-// @sylefeb 2022-01-04
+// @sylefeb 2025-04-08
 /*
 BSD 3-Clause License
 
@@ -34,44 +34,24 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 #include <vector>
-#include <string>
 
-#include "uintX.h"
+class uintX
+{
+private:
+  std::vector<uint32_t> m_bits;
+public:
+  uintX() {}
+  void set(uint b, bool v) {
+    uint i = b >> 5;
+    if (i >= m_bits.size()) { m_bits.resize(i + 1, 0); }
+    if (v) m_bits[i] |=  (uint32_t(1) << (b & 31));
+    else   m_bits[i] &= ~(uint32_t(1) << (b & 31));
+  }
+  bool get(uint b) {
+    uint i = b >> 5;
+    if (i >= m_bits.size()) return 0;
+    return 1 == ((m_bits[i] >> (b & 31)) & 1);
+  }
+  uint bitsize() { return (uint)m_bits.size() * 32; }
+};
 
-typedef unsigned char uchar;
-
-#pragma pack(push)
-#pragma pack(1)
-// struct holding a LUT configuration:
-// - cfg is a 16 bits integer that defined the truth table for 4 inputs
-// - inputs[4] are the indices of the inputs (other LUTs in the LUT table)
-//   Each index lower bit indicates whether the input is connected to D (0)
-//   or Q (1). The higher bits are the LUT index.
-//   So for LUT i the index is obtained as (i<<1) + 0 if connected to D
-//                                      or (i<<1) + 1 if connected to Q
-//   Given the index x, the LUT is (x>>1) and (x&1) == 1 if Q, otherwise D
-typedef struct s_lut {
-  unsigned short cfg;
-  int            inputs[4];
-  bool           external; // TODO: try to move this out of t_lut, only used between read and analyze
-} t_lut;
-#pragma pack(pop)
-
-// struct holding a BRAM
-typedef struct s_bram {
-   std::string      name;
-   uintX            data;
-   std::vector<int> rd_addr;
-   std::vector<int> rd_data;
-   std::vector<int> wr_data;
-   std::vector<int> wr_en;
-   // int              rd_clock;
-   // int              wr_clock;
-} t_bram;
-
-void readDesign(
-  std::vector<t_lut>&                       _luts,
-  std::vector<t_bram>&                      _brams,
-  std::vector<std::pair<std::string,int> >& _outbits,
-  std::vector<int>&                         _ones,
-  std::map<string, int>&                    _indices);

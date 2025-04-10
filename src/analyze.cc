@@ -97,7 +97,9 @@ bool analyzeStep(const vector<t_lut>& luts,vector<int>& _depths)
 // of all LUTs
 void analyze(
   vector<t_lut>&    _luts,
-  std::vector<pair<std::string, int> >& _outbits,
+  vector<t_bram>&   _brams,
+  vector<pair<string, int> >& _outbits,
+  map<string,int>&  _indices,
   vector<int>&      _ones,
   vector<int>&      _step_starts,
   vector<int>&      _step_ends,
@@ -157,6 +159,9 @@ void analyze(
             if (with_init.count(_luts[l].inputs[i]) != 0) {
               no_init_input = false; break;
             }
+            if (_luts[_luts[l].inputs[i] >> 1].external) {
+              no_init_input = false; break;
+            }
           }
         }
         if (no_init_input) {
@@ -177,16 +182,19 @@ void analyze(
       }
     }
   }
-
+  // update max_depth
+  max_depth = 0;
+  for (int l = 0; l < _luts.size(); ++l) {
+    max_depth = max(max_depth, source[l].first);
+  }
 #if 0
   // debug: output full list of LUTs
-  for (int l = 0; l < luts.size(); ++l) {
-    int i0d = luts[l].inputs[0] < 0 ? 999 : (luts[l].inputs[0] & 1 ? 999 : source[luts[l].inputs[0] >> 1].first);
-    int i1d = luts[l].inputs[1] < 0 ? 999 : (luts[l].inputs[1] & 1 ? 999 : source[luts[l].inputs[1] >> 1].first);
-    int i2d = luts[l].inputs[2] < 0 ? 999 : (luts[l].inputs[2] & 1 ? 999 : source[luts[l].inputs[2] >> 1].first);
-    int i3d = luts[l].inputs[3] < 0 ? 999 : (luts[l].inputs[3] & 1 ? 999 : source[luts[l].inputs[3] >> 1].first);
-    fprintf(stderr, "LUT %d, depth %d min input depths: %d\n",
-      l, source[l].first, min(min(i0d, i1d), min(i2d, i3d)));
+  for (int l = 0; l < _luts.size(); ++l) {
+    int i0d = _luts[l].inputs[0] < 0 ? 999 : (_luts[l].inputs[0] & 1 ? 999 : source[_luts[l].inputs[0] >> 1].first);
+    int i1d = _luts[l].inputs[1] < 0 ? 999 : (_luts[l].inputs[1] & 1 ? 999 : source[_luts[l].inputs[1] >> 1].first);
+    int i2d = _luts[l].inputs[2] < 0 ? 999 : (_luts[l].inputs[2] & 1 ? 999 : source[_luts[l].inputs[2] >> 1].first);
+    int i3d = _luts[l].inputs[3] < 0 ? 999 : (_luts[l].inputs[3] & 1 ? 999 : source[_luts[l].inputs[3] >> 1].first);
+    fprintf(stderr, "LUT %d, depth %d min input depths: %d\n", l<<1, source[l].first, min(min(i0d, i1d), min(i2d, i3d)));
   }
 #endif
   // sort by depth
@@ -209,8 +217,8 @@ void analyze(
     }
   }
   // reorder the LUTs
-  vector<t_lut> init_luts = _luts;
-  reorderLUTs(init_luts, reorder, inv_reorder, _luts, _outbits, _ones);
+  vector<t_lut>  init_luts = _luts;
+  reorderLUTs(init_luts, reorder, inv_reorder, _luts, _brams, _outbits, _indices, _ones);
   // print report
   fprintf(stderr,"analysis done\n");
   for (int d=0;d<_step_starts.size();++d) {
@@ -229,7 +237,9 @@ void reorderLUTs(
   const vector<int>&         reorder,
   const vector<int>&         inv_reorder,
   vector<t_lut>&             _luts,
+  vector<t_bram>&            _brams,
   vector<pair<string,int> >& _outbits,
+  map<string, int>&          _indices,
   vector<int>&               _ones)
 {
   /// apply the reordering
@@ -253,6 +263,27 @@ void reorderLUTs(
     int reg            = _outbits[b].second &1;
     int src            = _outbits[b].second>>1;
     _outbits[b].second = (inv_reorder[src]<<1) | reg;
+  }
+  // -> indices
+  for (auto& idc : _indices) {
+    int reg    = idc.second & 1;
+    int src    = idc.second >> 1;
+    idc.second = (inv_reorder[src] << 1) | reg;
+  }
+  // -> brams
+  for (auto& b : _brams) {
+    vector<vector<int>*> vecs;
+    vecs.push_back(&b.rd_addr);
+    vecs.push_back(&b.rd_data);
+    vecs.push_back(&b.wr_data);
+    vecs.push_back(&b.wr_en);
+    for (auto vptr : vecs) {
+      for (int i=0;i < (int)vptr->size();++i) {
+        int reg     = vptr->at(i) & 1;
+        int src     = vptr->at(i) >> 1;
+        vptr->at(i) = (inv_reorder[src] << 1) | reg;
+      }
+    }
   }
   // -> ones (init)
   for (int b = 0; b < _ones.size(); ++b) {
