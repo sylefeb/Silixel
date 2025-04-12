@@ -54,7 +54,7 @@ memory -nomap
 opt_clean
 
 opt -fast -full -nodffe -nosdff
-memory_map
+# memory_map
 opt -full -nodffe -nosdff
 techmap
 opt -fast -nodffe -nosdff

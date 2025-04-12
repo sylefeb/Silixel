@@ -169,9 +169,8 @@ After running `./build/src/silixel` you should see this:
 <p align="center"><img src="silice_vga_test.gif" width="50%"></p>
 
 Time to experiment, the source code is yours to hack!
-Please let me know what you thought, and feel free to [reach out on Twitter](https://twitter.com/sylefeb/).
+Please let me know what you thought, and feel free to [reach out on Mastodon](https://mastodon.online/@sylefeb).
 
 ## Limitations
 
 - Single clock domain
-
