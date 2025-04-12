@@ -1,0 +1,22 @@
+unit main(output uint8 test)
+{
+  bram uint8 ram[256] = {1,2,3,4,5,6,7,8,9,0,pad(0)};
+
+  always_before {
+      test = 8hff;
+  }
+
+  algorithm {
+    ram.addr    = 0;
+    ram.wenable = 0;
+    while (1) {
+      test        = ram.rdata;
+      ram.wenable = 1;
+      ram.wdata   = ram.rdata + 10;
+++:
+      test        = 8hff;
+      ram.wenable = 0;
+      ram.addr    = ram.addr > 10 ? 0 : ram.addr + 1;
+  	}
+  }
+}

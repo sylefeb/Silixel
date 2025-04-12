@@ -1,0 +1,9 @@
+unit main(output uint8 test)
+{
+  bram uint8 ram[256] = {1,2,3,4,5,6,7,8,9,0,pad(0)};
+
+  always {
+	  test     = ram.rdata;
+    ram.addr = ram.rdata;
+  }
+}
