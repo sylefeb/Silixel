@@ -179,6 +179,7 @@ void buildSimulData(
     vector< tuple<string, uint, vector<int>* > > ports_width;
     ports_width.push_back(make_tuple("RD_ADDR", b.addr_width, &_brams.back().rd_addr));
     ports_width.push_back(make_tuple("RD_DATA", b.data_width, &_brams.back().rd_data));
+    ports_width.push_back(make_tuple("WR_ADDR", b.addr_width, &_brams.back().wr_addr));
     ports_width.push_back(make_tuple("WR_DATA", b.data_width, &_brams.back().wr_data));
     ports_width.push_back(make_tuple("WR_EN",   b.data_width, &_brams.back().wr_en));
     // -> check and connect
@@ -243,7 +244,7 @@ void buildSimulData(
   }
 
   /// DEBUG
-#if 1
+#if 0
   map<int, string> reverse_indices;
   for (auto& idc : _indices) {
     reverse_indices[idc.second] = idc.first;

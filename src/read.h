@@ -63,6 +63,7 @@ typedef struct s_bram {
    uintX            data;
    std::vector<int> rd_addr;
    std::vector<int> rd_data;
+   std::vector<int> wr_addr;
    std::vector<int> wr_data;
    std::vector<int> wr_en;
    // int              rd_clock;

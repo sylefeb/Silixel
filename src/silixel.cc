@@ -317,6 +317,10 @@ void mainRender()
   ImGui::SetNextWindowSize(ImVec2(300, 150), ImGuiCond_Once);
   ImGui::Begin("Status");
   ImGui::Checkbox("Simulate on GPU", &g_Use_GPU);
+  if (g_Use_GPU && !g_brams.empty()) {
+    cerr << "this design has BRAMs, currently unsupported on GPU\n";
+    g_Use_GPU = false;
+  }
   ImGui::Text("%5.1f KHz %5.1f usec / cycle", g_Hz/1000.0, g_UsecPerCycle);
   ImGui::Text("simulated cycle: %6d", g_Cycle);
   ImGui::Text("simulated LUT4+FF %7d", g_luts.size());
@@ -371,6 +375,10 @@ int main(int argc, char **argv)
     /// load up design
     vector<pair<string,int> > outbits;
     readDesign(g_luts, g_brams, outbits, g_ones, g_indices);
+    
+    if (!g_brams.empty()) {
+      g_Use_GPU = false;
+    }
 
     analyze(g_luts, g_brams, outbits, g_indices, g_ones, g_step_starts, g_step_ends, g_cpu_depths);
 
@@ -389,7 +397,7 @@ int main(int argc, char **argv)
     simulInit_cpu(g_luts, g_brams, g_step_starts, g_step_ends, g_ones, g_cpu_computelists, g_cpu_outputs);
 
     /// Quick benchmarking at startup
-#if 1
+#if 0
     // -> time GPU
     simulBegin_gpu(g_luts,g_step_starts,g_step_ends,g_ones);
     {

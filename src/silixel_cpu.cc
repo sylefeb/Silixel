@@ -46,17 +46,28 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 using namespace std;
 
 #include "simul_cpu.h"
+// #include "fstapi/fstapi.h"
 
 // -----------------------------------------------------------------------------
 
-void add_watch(string signal, const map<string, int>& indices, vector<pair<string, int> > &_watches)
+typedef struct {
+  string    name;
+  int       index;
+  // fstHandle fst;
+} t_watch;
+
+void add_watch(string signal, const map<string, int>& indices, vector<t_watch> &_watches)
 {
   auto I = indices.find(signal);
   if (I == indices.end()) {
     fprintf(stderr, "<error> cannot find signal '%s' to watch\n", signal.c_str());
     exit (-1);
   }
-  _watches.push_back(make_pair(signal, I->second));
+  t_watch w;
+  w.name = signal;
+  w.index = I->second;
+  // w.fst = 0;
+  _watches.push_back(w);
 }
 
 // -----------------------------------------------------------------------------
@@ -108,62 +119,59 @@ int main(int argc,char **argv)
   buildFanout(luts, fanout);
 
   /// add reset to init to ones
-  // ones.push_back(indices.at("reset"));
+  bool has_reset = indices.count("reset") > 0;
+  if (has_reset) {
+    ones.push_back(indices.at("reset"));
+  }
 
   /// simulate
   vector<uchar> outputs;
   vector<int>   computelists;
   simulInit_cpu(luts, brams, step_starts, step_ends, ones, computelists, outputs);
 
-  vector<pair<string, int> > watches;
-  ForIndex(i, 12) {
-    // add_watch("__main._w_cpu_mem_addr[" + std::to_string(i) + "]", indices, watches);
+  vector<t_watch> watches;
+  //ForIndex(i, 3) {
+  // add_watch("_q__idx_fsm0[" + std::to_string(i) + "]", indices, watches);
+  //}
+  if (has_reset) {
+    add_watch("reset", indices, watches);
   }
-  ForIndex(i, 32) {
-    // add_watch("__main.cpu.exec.in_instr[" + std::to_string(0 + i) + "]", indices, watches);
-  }
-  ForIndex(i, 4) {
-    // add_watch("__mem__ram.out_rdata[" + std::to_string(i) + "]", indices, watches);
-  }
-  ForIndex(i, 12) {
-     // add_watch("__main.cpu._q_pc[" + std::to_string(i) + "]", indices, watches);
-  }
-  ForIndex(i, 5) {
-    // add_watch("__main.out_leds[" + std::to_string(i) + "]", indices, watches);
-  }
-  // add_watch("__main.cpu.exec.out_no_rd", indices, watches);
-  ForIndex(i, 3) {
-    // add_watch("_q__idx_fsm0[" + std::to_string(i) + "]", indices, watches);
-  }
-  // add_watch("reset", indices, watches);
 
-  //LibSL::CppHelpers::Console::clear();
+  // LibSL::CppHelpers::Console::clear();
 
-  //LibSL::CppHelpers::Console::pushCursor();
+  // LibSL::CppHelpers::Console::pushCursor();
   fprintf(stderr, "       _____\n");
   fprintf(stderr, " init_/       ");
   simulPrintOutput_cpu(outputs, outbits);
 
   // print watches
   for (auto w : watches) {
-    int b        = w.second;
+    int b        = w.index;
     int lut      = b >> 1;
     int q_else_d = b & 1;
     int bit      = (outputs[lut] >> q_else_d) & 1;
-    fprintf(stderr, "(%d) %s\t%d\n", b, w.first.c_str(), bit);
+    fprintf(stderr, "(%d) %s\t%d\n", b, w.name.c_str(), bit);
   }
 
-  //LibSL::CppHelpers::Console::popCursor();
-  //LibSL::CppHelpers::Console::pushCursor();
+  // FST trace
+  //void *fst = fstWriterCreate("trace.fst", false);
+  //for (auto& w : watches) {
+  //  w.fst = fstWriterCreateVar(fst, FST_VT_VCD_INTEGER, FST_VD_BUFFER, 1, w.name.c_str(), 0);
+  //}
+
+  // LibSL::CppHelpers::Console::popCursor();
+  // LibSL::CppHelpers::Console::pushCursor();
 
   int cycles = 0;
-  while (1) {
+  // while (1) {
+  while (cycles < 100) {
 
-    if (cycles < 16) {
-      //simulSetSignal_cpu(indices.at("reset"), true, depths, (int)step_starts.size(), fanout, computelists, outputs);
-      fprintf(stderr, "R ");
-    } else if (cycles == 16) {
-      //simulSetSignal_cpu(indices.at("reset"), false, depths, (int)step_starts.size(), fanout, computelists, outputs);
+    if (has_reset) {
+      if (cycles < 16) {
+        simulSetSignal_cpu(indices.at("reset"), true, depths, (int)step_starts.size(), fanout, computelists, outputs);
+      } else if (cycles == 16) {
+        simulSetSignal_cpu(indices.at("reset"), false, depths, (int)step_starts.size(), fanout, computelists, outputs);
+      }
     }
 
     simulCycle_cpu(luts, brams, depths, step_starts, step_ends, fanout, computelists, outputs);
@@ -177,18 +185,22 @@ int main(int argc,char **argv)
     fprintf(stderr, c_ClockAnim[a * 2 + 1]);
     simulPrintOutput_cpu(outputs, outbits);
 
-    // print watches
+    // print and trace watches
     for (auto w : watches) {
-      int b        = w.second;
+      int b        = w.index;
       int lut      = b >> 1;
       int q_else_d = b & 1;
       int bit      = (outputs[lut] >> q_else_d) & 1;
-      fprintf(stderr, "(%d) %s\t%d\n", b,w.first.c_str(), bit);
+      fprintf(stderr, "(%d) %s\t%d\n", b,w.name.c_str(), bit);
+      //fstWriterEmitValueChange(fst, w.fst, &bit);
     }
+    //fstWriterEmitTimeChange(fst, cycles);
 
     ++cycles;
     // Sleep(500); /// slow down on purpose
   }
+
+  // fstWriterClose(fst);
 
 	return 0;
 }

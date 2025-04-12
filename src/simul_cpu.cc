@@ -176,6 +176,15 @@ void simulBRAMS_cpu(
       uint bit     = ((_outputs[lut] >> q_else_d) & 1) ? 1 : 0;
       rd_addr      = rd_addr | (bit << i);
     }
+    // make wr_addr
+    uint wr_addr = 0;
+    for (int i=0;i < bram.wr_addr.size();++i) {
+      int b        = bram.wr_addr[i];
+      int lut      = b >> 1;
+      int q_else_d = b & 1;
+      uint bit     = ((_outputs[lut] >> q_else_d) & 1) ? 1 : 0;
+      wr_addr      = wr_addr | (bit << i);
+    }
     // DEBUG
     uint32_t dbg_rdata = 0;
     uint32_t dbg_wdata = 0;
@@ -211,8 +220,8 @@ void simulBRAMS_cpu(
     }
     // get wr_data and store
     if (!bram.wr_data.empty()) {
-      for (int i=0;i < bram.rd_data.size();++i) {
-        int  o        = bram.data.bitsize() - (int)(rd_addr * bram.rd_data.size());
+      for (int i=0;i < bram.wr_data.size();++i) {
+        int  o        = bram.data.bitsize() - (int)(wr_addr * bram.rd_data.size());
         int  bw       = bram.wr_data[i];
         uint bit_w    = (_outputs[bw >> 1] >> (bw & 1)) & 1;
         int  be       = bram.wr_en[i];
@@ -223,7 +232,7 @@ void simulBRAMS_cpu(
       }
     }
     // report
-    fprintf(stderr, "- bram %s @%08x = %08x w:%08x(%08x)\n", bram.name.c_str(), rd_addr, dbg_rdata, dbg_wdata, dbg_wen);
+    // fprintf(stderr, "- bram %s @%08x = %08x w:@%08x=%08x(%08x)\n", bram.name.c_str(), rd_addr, dbg_rdata, wr_addr, dbg_wdata, dbg_wen);
   }
 }
 

@@ -277,6 +277,7 @@ void reorderLUTs(
     vector<vector<int>*> vecs;
     vecs.push_back(&b.rd_addr);
     vecs.push_back(&b.rd_data);
+    vecs.push_back(&b.wr_addr);
     vecs.push_back(&b.wr_data);
     vecs.push_back(&b.wr_en);
     for (auto vptr : vecs) {
