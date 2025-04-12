@@ -46,14 +46,19 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 using namespace std;
 
 #include "simul_cpu.h"
-// #include "fstapi/fstapi.h"
+#include "fstapi/fstapi.h"
+#define FST_TS_S    0
+#define FST_TS_MS  -3
+#define FST_TS_US  -6
+#define FST_TS_NS  -9
+#define FST_TS_PS  -12
 
 // -----------------------------------------------------------------------------
 
 typedef struct {
   string    name;
   int       index;
-  // fstHandle fst;
+  fstHandle fst;
 } t_watch;
 
 void add_watch(string signal, const map<string, int>& indices, vector<t_watch> &_watches)
@@ -66,7 +71,7 @@ void add_watch(string signal, const map<string, int>& indices, vector<t_watch> &
   t_watch w;
   w.name = signal;
   w.index = I->second;
-  // w.fst = 0;
+  w.fst = 0;
   _watches.push_back(w);
 }
 
@@ -154,10 +159,12 @@ int main(int argc,char **argv)
   }
 
   // FST trace
-  //void *fst = fstWriterCreate("trace.fst", false);
-  //for (auto& w : watches) {
-  //  w.fst = fstWriterCreateVar(fst, FST_VT_VCD_INTEGER, FST_VD_BUFFER, 1, w.name.c_str(), 0);
-  //}
+  fstWriterContext *fst = fstWriterCreate("trace.fst", 1);
+  fstWriterSetTimescale(fst, 1);
+  fstWriterSetScope(fst, FST_ST_VCD_MODULE, "top", NULL);
+  for (auto& w : watches) {
+    w.fst = fstWriterCreateVar(fst, FST_VT_VCD_WIRE, FST_VD_IMPLICIT, 1, w.name.c_str(), NULL);
+  }
 
   // LibSL::CppHelpers::Console::popCursor();
   // LibSL::CppHelpers::Console::pushCursor();
@@ -186,21 +193,21 @@ int main(int argc,char **argv)
     simulPrintOutput_cpu(outputs, outbits);
 
     // print and trace watches
+    fstWriterEmitTimeChange(fst, cycles);
     for (auto w : watches) {
       int b        = w.index;
       int lut      = b >> 1;
       int q_else_d = b & 1;
       int bit      = (outputs[lut] >> q_else_d) & 1;
       fprintf(stderr, "(%d) %s\t%d\n", b,w.name.c_str(), bit);
-      //fstWriterEmitValueChange(fst, w.fst, &bit);
+      fstWriterEmitValueChange(fst, w.fst, bit ? "1" : "0");
     }
-    //fstWriterEmitTimeChange(fst, cycles);
 
     ++cycles;
     // Sleep(500); /// slow down on purpose
   }
 
-  // fstWriterClose(fst);
+  fstWriterClose(fst);
 
 	return 0;
 }
