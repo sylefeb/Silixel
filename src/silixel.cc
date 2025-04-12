@@ -229,8 +229,9 @@ void simulCPU()
   if (designHasVGA()) {
     // multiple steps
     int num_measures = 0;
+    const int N_measures = 100;
     Elapsed el;
-    while (num_measures++ < 100) {
+    while (num_measures++ < N_measures) {
       simulCycle_cpu(g_luts, g_brams, g_cpu_depths, g_step_starts, g_step_ends, g_cpu_fanout, g_cpu_computelists, g_cpu_outputs);
       simulPosEdge_cpu(g_luts, g_cpu_depths, (int)g_step_starts.size(), g_cpu_fanout, g_cpu_computelists, g_cpu_outputs);
       int vs = simulCPU_output("out_video_vs");
@@ -250,17 +251,21 @@ void simulCPU()
       updateFrame(vs, hs, r, g, b);
     }
     auto ms = el.elapsed();
-    g_Hz = (double)100 / ((double)ms / 1000.0);
-    g_UsecPerCycle = (double)ms * 1000.0 / (double)100;
+    g_Hz = (double)N_measures / ((double)ms / 1000.0);
+    g_UsecPerCycle = (double)ms * 1000.0 / (double)N_measures;
   } else {
-    // step
+    // multiple steps
+    int num_measures = 0;
+    const int N_measures = 20;
     Elapsed el;
-    simulCycle_cpu(g_luts, g_brams, g_cpu_depths, g_step_starts, g_step_ends, g_cpu_fanout, g_cpu_computelists, g_cpu_outputs);
-    simulPosEdge_cpu(g_luts, g_cpu_depths, (int)g_step_starts.size(), g_cpu_fanout, g_cpu_computelists, g_cpu_outputs);
+    while (num_measures++ < N_measures) {
+      simulCycle_cpu(g_luts, g_brams, g_cpu_depths, g_step_starts, g_step_ends, g_cpu_fanout, g_cpu_computelists, g_cpu_outputs);
+      simulPosEdge_cpu(g_luts, g_cpu_depths, (int)g_step_starts.size(), g_cpu_fanout, g_cpu_computelists, g_cpu_outputs);
+    }
     auto ms = el.elapsed();
     if (ms > 0) {
-      g_Hz = (double)100 / ((double)ms / 1000.0);
-      g_UsecPerCycle = (double)ms * 1000.0 / (double)100;
+      g_Hz = (double)N_measures / ((double)ms / 1000.0);
+      g_UsecPerCycle = (double)ms * 1000.0 / (double)N_measures;
     } else {
       g_Hz = -1;
       g_UsecPerCycle = -1;
