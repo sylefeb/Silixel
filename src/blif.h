@@ -69,5 +69,12 @@ typedef struct {
   std::vector<t_bram_nfo>  brams;
 } t_blif;
 
+/// Parses a blif file
 void   parse(const char *fname, t_blif& _blif);
+
+/// Returns an integer representing the LUT configuration provides as strings
 ushort lut_config(const std::vector<std::pair<std::string, std::string> >& config_strings);
+
+/// Utilities
+// splits a string using a delimiter
+void   split(const std::string &s, char delim, std::vector<std::string> &elems);
