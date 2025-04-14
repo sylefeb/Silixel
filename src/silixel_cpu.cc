@@ -260,6 +260,7 @@ int main(int argc,const char **argv)
     add_watch("reset", indices, watches);
   }
 
+  LibSL::CppHelpers::Console::clear();
   LibSL::CppHelpers::Console::pushCursor();
   fprintf(stderr, "       _____\n");
   fprintf(stderr, " init_/       ");
@@ -361,6 +362,8 @@ int main(int argc,const char **argv)
   }
 
   fstWriterClose(fst);
+
+  fprintf(stderr, "\n\noutput: trace.fst\n\n");
 
 	return 0;
 }
