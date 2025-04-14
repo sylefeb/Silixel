@@ -379,7 +379,7 @@ int main(int argc, char **argv)
 
     /// load up design
     vector<pair<string,int> > outbits;
-    readDesign(g_luts, g_brams, outbits, g_ones, g_indices);
+    readDesign(SRC_PATH "/build/synth.blif", g_luts, g_brams, outbits, g_ones, g_indices);
     
     if (!g_brams.empty()) {
       g_Use_GPU = false;

@@ -121,7 +121,7 @@ void parse(const char *fname, t_blif& _blif)
   bool in_subckt = false;
   bool in_bram = false;
 
-  fprintf(stderr, " Parsing ... ");
+  fprintf(stderr, "Parsing ... ");
   Console::processingInit();
   while (!parser.eof()) {
     parser.skipSpaces();
@@ -201,7 +201,7 @@ void parse(const char *fname, t_blif& _blif)
                 ++b;
               }
             }
-            fprintf(stderr, "read %d init bits\n", _blif.brams.back().data.bitsize());
+            // fprintf(stderr, "read %d init bits\n", _blif.brams.back().data.bitsize());
           } else {
             // read value (max 32 bits)
             uint32_t v = 0;

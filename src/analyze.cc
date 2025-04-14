@@ -219,6 +219,7 @@ void analyze(
   // reorder the LUTs
   vector<t_lut>  init_luts = _luts;
   reorderLUTs(init_luts, reorder, inv_reorder, _luts, _brams, _outbits, _indices, _ones);
+#if 0
   // print report
   fprintf(stderr,"analysis done\n");
   for (int d=0;d<_step_starts.size();++d) {
@@ -227,6 +228,7 @@ void analyze(
       _step_ends[d] - _step_starts[d] + 1,
       (int)_luts.size());
   }
+#endif
 }
 
 // -----------------------------------------------------------------------------

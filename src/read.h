@@ -71,6 +71,7 @@ typedef struct s_bram {
 } t_bram;
 
 void readDesign(
+  const char                                *path,
   std::vector<t_lut>&                       _luts,
   std::vector<t_bram>&                      _brams,
   std::vector<std::pair<std::string,int> >& _outbits,

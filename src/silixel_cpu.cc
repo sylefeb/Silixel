@@ -162,12 +162,16 @@ const char *c_ClockAnim[] = {
 };
 
 
-int main(int argc,char **argv)
+int main(int argc,const char **argv)
 {
   bool silice_design = false;
   int num_cycles = 10000;
+  const char *blif_path = SRC_PATH "/build/synth.blif";
+
+  fprintf(stderr, "<<<====----- Silixel v0.1 by @sylefeb -----====>>>\n");
+
   /// parse options
-  int i = 1; 
+  int i = 1;
   while (i < argc) {
     if (strcmp(argv[i], "--silice") == 0) {
       silice_design = true;
@@ -180,15 +184,36 @@ int main(int argc,char **argv)
       ++i;
       num_cycles = atoi(argv[i]);
       ++i;
+    } else if (strcmp(argv[i], "--blif") == 0) {
+      if (i + 1 == argc) {
+        fprintf(stderr, "--blif expects a parameter (string, file to load)\n");
+        exit(-1);
+      }
+      ++i;
+      blif_path = argv[i];
+      ++i;
     } else { ++i; }
   }
+
+  /// checks
+  {
+    FILE *f = 0;
+    fopen_s(&f, blif_path, "rb");
+    if (f == NULL) {
+      fprintf(stderr, "<error> cannot open input blif file %s\n", blif_path);
+      exit(-1);
+    } else {
+      fclose(f);
+    }
+  }
+  
   /// load up design
   vector<t_lut>             luts;
   std::vector<t_bram>       brams;
   vector<pair<string,int> > outbits;
   vector<int>               ones;
   map<string, int>          indices;
-  readDesign(luts, brams, outbits, ones, indices);
+  readDesign(blif_path, luts, brams, outbits, ones, indices);
 
   vector<int>   step_starts;
   vector<int>   step_ends;
@@ -234,8 +259,6 @@ int main(int argc,char **argv)
   if (has_reset) {
     add_watch("reset", indices, watches);
   }
-
-  LibSL::CppHelpers::Console::clear();
 
   LibSL::CppHelpers::Console::pushCursor();
   fprintf(stderr, "       _____\n");
