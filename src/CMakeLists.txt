@@ -4,9 +4,6 @@ ADD_SUBDIRECTORY(LibSL EXCLUDE_FROM_ALL)
 ADD_SUBDIRECTORY(fstapi)
 
 IF(WASI)
-OPTION(LIBSL_BUILD_GL              "Build LibSL_gl" OFF)
-OPTION(LIBSL_BUILD_GL4             "Build LibSL_gl for OpenGL 4.x" OFF)
-OPTION(LIBSL_BUILD_GL4CORE         "Build LibSL_gl for OpenGL 4.x core profile" OFF)
 ELSE()
 
 SET(SHADERS
