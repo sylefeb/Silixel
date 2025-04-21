@@ -5,6 +5,9 @@ ADD_SUBDIRECTORY(fstapi)
 
 # ADD_DEFINITIONS(-DUSE_GLUX -DOPENGL -DOPENGL4)
 
+IF(WASI)
+ELSE()
+
 SET(SHADERS
 	sh_simul
 	sh_posedge
@@ -38,6 +41,8 @@ ADD_EXECUTABLE(silixel
 	analyze.cc
 	analyze.h
 	)
+
+ENDIF()
 
 IF(LINUX)
 TARGET_LINK_LIBRARIES(silixel LibSL LibSL_gl4core freeglut)
