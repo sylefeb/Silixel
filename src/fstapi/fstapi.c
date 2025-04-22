@@ -2002,7 +2002,12 @@ void fstWriterClose(fstWriterContext *xc)
 
             if (!xc->fourpack) {
                 unsigned char *mem = (unsigned char *)malloc(FST_GZIO_LEN);
+#if defined(__wasi__)
+                fprintf(stderr,"gzdopen not supported on WASI build (1)\n");
+                exit (-1);
+#else
                 zfd = dup(fileno(xc->handle));
+#endif
                 fflush(xc->handle);
                 zhandle = gzdopen(zfd, "wb4");
                 if (zhandle) {
@@ -2143,7 +2148,12 @@ void fstWriterClose(fstWriterContext *xc)
                     fflush(fp);
 
                     fstWriterFseeko(xc, xc->handle, 0, SEEK_SET);
+#if defined(__wasi__)
+                    fprintf(stderr,"gzdopen not supported on WASI build (1)\n");
+                    exit (-1);
+#else
                     zfd = dup(fileno(fp));
+#endif
                     dsth = gzdopen(zfd, "wb4");
                     if (dsth) {
                         for (offpnt = 0; offpnt < uclen; offpnt += FST_GZIO_LEN) {
@@ -3734,7 +3744,12 @@ static int fstReaderRecreateHierFile(struct fstReaderContext *xc)
 #ifndef __MINGW32__
             fflush(xc->f);
 #endif
+#if defined(__wasi__)
+            fprintf(stderr,"gzdopen not supported on WASI build (1)\n");
+            exit (-1);
+#else
             zfd = dup(fileno(xc->f));
+#endif
             zhandle = gzdopen(zfd, "rb");
             if (!zhandle) {
                 close(zfd);
@@ -4491,7 +4506,12 @@ int fstReaderInit(struct fstReaderContext *xc)
         _lseek(fileno(xc->f), FST_ZWRAPPER_HDR_SIZE, SEEK_SET);
 #endif
 
+#if defined(__wasi__)
+        fprintf(stderr,"gzdopen not supported on WASI build (1)\n");
+        exit (-1);
+#else
         zfd = dup(fileno(xc->f));
+#endif
         zhandle = gzdopen(zfd, "rb");
         if (zhandle) {
             for (offpnt = 0; offpnt < uclen; offpnt += FST_GZIO_LEN) {

@@ -206,7 +206,7 @@ int main(int argc,const char **argv)
       fclose(f);
     }
   }
-  
+
   /// load up design
   vector<t_lut>             luts;
   std::vector<t_bram>       brams;
@@ -306,7 +306,7 @@ int main(int argc,const char **argv)
     fstWriterEmitTimeChange(fst, (cycles << 1) + 0);
     fstWriterEmitValueChange(fst, fst_clock, "0");
     simulCycle_cpu(luts, brams, depths, step_starts, step_ends, fanout, computelists, outputs);
-    
+
     fstWriterEmitTimeChange(fst, (cycles << 1) + 1);
     fstWriterEmitValueChange(fst, fst_clock, "1");
     simulPosEdge_cpu(luts, depths, (int)step_starts.size(), fanout, computelists, outputs);
@@ -337,7 +337,7 @@ int main(int argc,const char **argv)
       if (w.bit_index > -1) {
         if (values[w.base_name].empty()) {
           values[w.base_name].resize(bitcounts[w.base_name], '0');
-        }        
+        }
         values[w.base_name][bitcounts[w.base_name]-1-w.bit_index] = bit ? '1' : '0';
       } else {
         values[w.base_name] = bit ? "1" : "0";
