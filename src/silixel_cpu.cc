@@ -267,7 +267,11 @@ int main(int argc,const char **argv)
   // simulPrintOutput_cpu(outputs, outbits);
 
   // FST trace
-  fstWriterContext *fst = fstWriterCreate("trace.fst", 1);
+  fstWriterContext *fst = fstWriterCreate("./trace.fst", 1);
+  if (fst == NULL) {
+    fprintf(stderr,"cannot open trace.fst for writing\n");
+    exit (-1);
+  }
   fstWriterSetTimescale(fst, 1);
   fstWriterSetScope(fst, FST_ST_VCD_MODULE, "top", NULL);
   // -> group individual bits

@@ -227,6 +227,29 @@ static FILE *tmpfile_open(char **nam)
 
 #else
 
+#if defined(__wasi__)
+
+static FILE *tmpfile_open(char **nam)
+{
+    static int cnt = 0;
+    char name[256];
+    if (*nam) {
+      snprintf(name,256,"%04d%s",cnt++,*nam);
+    } else {
+      snprintf(name,256,"%04d",cnt++);
+    }
+    FILE *f = fopen(name,"wb");
+    if (f == NULL) {
+      fprintf(stderr,"tmpfile_open failed on %s\n",name);
+    }
+    if (nam) {
+        *nam = NULL;
+    }
+    return (f);
+}
+
+#else
+
 static FILE *tmpfile_open(char **nam)
 {
     FILE *f = tmpfile(); /* replace with mkstemp() + fopen(), etc if this is not good enough */
@@ -236,6 +259,7 @@ static FILE *tmpfile_open(char **nam)
     return (f);
 }
 
+#endif
 #endif
 
 static void tmpfile_close(FILE **f, char **nam)
@@ -927,6 +951,7 @@ static void fstWriterEmitHdrBytes(struct fstWriterContext *xc)
 /*
  * mmap functions
  */
+ 
 static void fstWriterMmapSanity(void *pnt, const char *file, int line, const char *usage)
 {
     if (pnt == NULL
@@ -1104,10 +1129,8 @@ static void fstDetermineBreakSize(struct fstWriterContext *xc)
 fstWriterContext *fstWriterCreate(const char *nam, int use_compressed_hier)
 {
     fstWriterContext *xc = (fstWriterContext *)calloc(1, sizeof(fstWriterContext));
-
     xc->compress_hier = use_compressed_hier;
     fstDetermineBreakSize(xc);
-
     if ((!nam) || (!(xc->handle = unlink_fopen(nam, "w+b")))) {
         free(xc);
         xc = NULL;
