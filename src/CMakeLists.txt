@@ -65,7 +65,6 @@ ADD_EXECUTABLE(silixel_cpu
 	read.h
 	analyze.cc
 	analyze.h
-  wasi.cc
 	)
 
 TARGET_LINK_LIBRARIES(silixel_cpu LibSL fstapi)
