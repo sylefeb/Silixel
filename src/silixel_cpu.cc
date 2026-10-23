@@ -166,7 +166,7 @@ int main(int argc,const char **argv)
 {
   bool silice_design = false;
   int num_cycles = 10000;
-  const char *blif_path = SRC_PATH "/build/synth.blif";
+  const char *blif_path = "";
 
   fprintf(stderr, "<<<====----- Silixel v0.1 by @sylefeb -----====>>>\n");
 
@@ -193,6 +193,10 @@ int main(int argc,const char **argv)
       blif_path = argv[i];
       ++i;
     } else { ++i; }
+  }
+
+  if (blif_path[0] == 0) {
+    fprintf(stderr, "no blif file on input (give one with --blif <filename>)\n");
   }
 
   /// checks
