@@ -51,6 +51,9 @@ int     system( const char* ) {}
 clock_t clock() { return 0; }
 FILE   *tmpfile() { return NULL; }
 int     __cxa_thread_atexit(void*, void*, void*) {}
+// used by zlib (LibSL), not exported by wasi-libc
+__attribute__((weak)) void *memalign(size_t alignment, size_t size)
+{ void *ptr = NULL; return posix_memalign(&ptr, alignment, size) == 0 ? ptr : NULL; }
 }
 
 #endif

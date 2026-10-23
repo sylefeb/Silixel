@@ -1,9 +1,14 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.5)
 
+IF(EMSCRIPTEN)
+# LibSL tests for EMSCRIPTEN, which recent emcc no longer defines
+ADD_DEFINITIONS(-DEMSCRIPTEN)
+ENDIF()
+
 ADD_SUBDIRECTORY(LibSL EXCLUDE_FROM_ALL)
 ADD_SUBDIRECTORY(fstapi)
 
-IF(WASI)
+IF(WASI OR EMSCRIPTEN)
 ELSE()
 
 SET(SHADERS
@@ -64,6 +69,13 @@ ADD_EXECUTABLE(silixel_cpu
 	)
 
 TARGET_LINK_LIBRARIES(silixel_cpu LibSL fstapi)
+
+IF(EMSCRIPTEN)
+# runs under node.js with direct access to the host file system
+# (reads the blif file, writes trace.fst in the current directory)
+TARGET_LINK_OPTIONS(silixel_cpu PRIVATE
+  -sNODERAWFS=1 -sALLOW_MEMORY_GROWTH=1 -sEXIT_RUNTIME=1)
+ENDIF()
 
 # install and paths
 

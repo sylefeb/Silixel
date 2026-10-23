@@ -229,21 +229,24 @@ static FILE *tmpfile_open(char **nam)
 
 #if defined(__wasi__)
 
+/*
+ * no tmpfile() on WASI: use a named file in the current directory, opened
+ * for reading as well (mmap emulation reads it back), and removed by
+ * tmpfile_close()
+ */
 static FILE *tmpfile_open(char **nam)
 {
     static int cnt = 0;
-    char name[256];
-    if (*nam) {
-      snprintf(name,256,"%04d%s",cnt++,*nam);
-    } else {
-      snprintf(name,256,"%04d",cnt++);
-    }
-    FILE *f = fopen(name,"wb");
+    char name[64];
+    FILE *f;
+
+    snprintf(name, sizeof(name), "fst_tmp_%04d", cnt++);
+    f = unlink_fopen(name, "w+b");
     if (f == NULL) {
-      fprintf(stderr,"tmpfile_open failed on %s\n",name);
+        fprintf(stderr, FST_APIMESS "tmpfile_open failed on %s\n", name);
     }
     if (nam) {
-        *nam = NULL;
+        *nam = f ? strdup(name) : NULL;
     }
     return (f);
 }
@@ -300,6 +303,110 @@ static int fstFtruncate(int fd, fst_off_t length)
 {
     return (ftruncate(fd, length));
 }
+
+/*
+ * gzip stream compatibility
+ */
+#if defined(__wasi__)
+/*
+ * no dup() on WASI so gzdopen() cannot be given a private descriptor:
+ * (de)compress the gzip stream directly through the stdio handles instead
+ */
+#define FST_GZIP_NO_DUP
+
+/* gzip compresses len bytes from src (current position) to dst */
+static int fstGzipCopy(FILE *dst, FILE *src, fst_off_t len)
+{
+    z_stream strm;
+    unsigned char *in = (unsigned char *)malloc(FST_GZIO_LEN);
+    unsigned char *out = (unsigned char *)malloc(FST_GZIO_LEN);
+    int flush = Z_NO_FLUSH;
+    int pass_status = 1;
+
+    memset(&strm, 0, sizeof(strm));
+    if (!in || !out ||
+        deflateInit2(&strm, 4, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY) != Z_OK) {
+        free(in);
+        free(out);
+        return (0);
+    }
+    while (pass_status && flush != Z_FINISH) {
+        size_t rdlen = (len > FST_GZIO_LEN) ? FST_GZIO_LEN : (size_t)len;
+        if (rdlen && fstFread(in, rdlen, 1, src) != 1) {
+            pass_status = 0;
+            break;
+        }
+        len -= rdlen;
+        flush = len ? Z_NO_FLUSH : Z_FINISH;
+        strm.next_in = in;
+        strm.avail_in = rdlen;
+        do {
+            size_t wrlen;
+            strm.next_out = out;
+            strm.avail_out = FST_GZIO_LEN;
+            deflate(&strm, flush);
+            wrlen = FST_GZIO_LEN - strm.avail_out;
+            if (wrlen && fstFwrite(out, wrlen, 1, dst) != 1) {
+                pass_status = 0;
+                break;
+            }
+        } while (strm.avail_out == 0);
+    }
+    deflateEnd(&strm);
+    free(in);
+    free(out);
+    return (pass_status);
+}
+
+/* gzip decompresses from src (current position) to dst until uclen bytes are produced */
+static int fstGunzipCopy(FILE *dst, FILE *src, fst_off_t uclen)
+{
+    z_stream strm;
+    unsigned char *in = (unsigned char *)malloc(FST_GZIO_LEN);
+    unsigned char *out = (unsigned char *)malloc(FST_GZIO_LEN);
+    int pass_status = 1;
+
+    memset(&strm, 0, sizeof(strm));
+    if (!in || !out || inflateInit2(&strm, 15 + 16) != Z_OK) {
+        free(in);
+        free(out);
+        return (0);
+    }
+    while (uclen > 0) {
+        size_t wrlen = (uclen > FST_GZIO_LEN) ? FST_GZIO_LEN : (size_t)uclen;
+        int rc;
+        if (!strm.avail_in) {
+            strm.next_in = in;
+            strm.avail_in = fstFread(in, 1, FST_GZIO_LEN, src);
+            if (!strm.avail_in) {
+                pass_status = 0;
+                break;
+            }
+        }
+        strm.next_out = out;
+        strm.avail_out = wrlen;
+        rc = inflate(&strm, Z_NO_FLUSH);
+        if (rc != Z_OK && rc != Z_STREAM_END && !(rc == Z_BUF_ERROR && !strm.avail_in)) {
+            pass_status = 0;
+            break;
+        }
+        wrlen -= strm.avail_out;
+        if (wrlen && fstFwrite(out, wrlen, 1, dst) != 1) {
+            pass_status = 0;
+            break;
+        }
+        uclen -= wrlen;
+        if (rc == Z_STREAM_END) {
+            pass_status = (uclen == 0);
+            break;
+        }
+    }
+    inflateEnd(&strm);
+    free(in);
+    free(out);
+    return (pass_status);
+}
+#endif
 
 /*
  * realpath compatibility
@@ -359,6 +466,114 @@ static void *fstMmap2(size_t __len, int __fd, fst_off_t __off)
                                 (LPVOID)NULL);
     CloseHandle(handle);
     return ptr;
+}
+#elif defined(__EMSCRIPTEN__) || defined(__wasi__)
+/*
+ * no usable shared file mappings (WASI has no mmap, Emscripten does not
+ * reliably write MAP_SHARED changes back to the file): emulate with a heap
+ * copy of the file range that is written back to the file on unmap
+ */
+#include <unistd.h>
+#ifndef PROT_READ
+#define PROT_READ 0x1
+#endif
+#ifndef PROT_WRITE
+#define PROT_WRITE 0x2
+#endif
+#ifndef MAP_SHARED
+#define MAP_SHARED 0x01
+#endif
+#define fstMmap(__addr, __len, __prot, __flags, __fd, __off) \
+    fstMmapEmu((__len), (__prot), (__flags), (__fd), (__off))
+#define fstMunmap(__addr, __len) \
+    { \
+        if (__addr) \
+            fstMunmapEmu((__addr)); \
+    }
+
+struct fstMmapEmuEntry
+{
+    struct fstMmapEmuEntry *next;
+    unsigned char *addr;
+    size_t len;
+    int fd;
+    fst_off_t off;
+    int write_back;
+};
+
+static struct fstMmapEmuEntry *fstMmapEmuList = NULL;
+
+static void *fstMmapEmu(size_t __len, int __prot, int __flags, int __fd, fst_off_t __off)
+{
+    struct fstMmapEmuEntry *e;
+    unsigned char *mem;
+    size_t pos = 0;
+
+    if (!__len) {
+        errno = EINVAL;
+        return NULL;
+    }
+    mem = (unsigned char *)malloc(__len);
+    e = (struct fstMmapEmuEntry *)malloc(sizeof(struct fstMmapEmuEntry));
+    if (!mem || !e) {
+        free(mem);
+        free(e);
+        errno = ENOMEM;
+        return NULL;
+    }
+    while (pos < __len) {
+        ssize_t rd = pread(__fd, mem + pos, __len - pos, __off + pos);
+        if (rd < 0 && errno == EINTR) {
+            continue;
+        }
+        if (rd < 0) {
+            free(mem);
+            free(e);
+            return NULL; /* e.g. descriptor not opened for reading */
+        }
+        if (rd == 0) {
+            break;
+        }
+        pos += rd;
+    }
+    if (pos < __len) {
+        memset(mem + pos, 0, __len - pos); /* beyond end of file */
+    }
+    e->addr = mem;
+    e->len = __len;
+    e->fd = __fd;
+    e->off = __off;
+    e->write_back = (__prot & PROT_WRITE) && (__flags & MAP_SHARED);
+    e->next = fstMmapEmuList;
+    fstMmapEmuList = e;
+    return mem;
+}
+
+static void fstMunmapEmu(void *__addr)
+{
+    struct fstMmapEmuEntry **pe = &fstMmapEmuList;
+    while (*pe && (*pe)->addr != __addr) {
+        pe = &(*pe)->next;
+    }
+    if (*pe) {
+        struct fstMmapEmuEntry *e = *pe;
+        if (e->write_back) {
+            size_t pos = 0;
+            while (pos < e->len) {
+                ssize_t wr = pwrite(e->fd, e->addr + pos, e->len - pos, e->off + pos);
+                if (wr < 0 && errno == EINTR) {
+                    continue;
+                }
+                if (wr <= 0) {
+                    break;
+                }
+                pos += wr;
+            }
+        }
+        *pe = e->next;
+        free(e->addr);
+        free(e);
+    }
 }
 #else
 #include <sys/mman.h>
@@ -2024,13 +2239,12 @@ void fstWriterClose(fstWriterContext *xc)
             fstWriterUint64(xc->handle, xc->hier_file_len); /* uncompressed length */
 
             if (!xc->fourpack) {
-                unsigned char *mem = (unsigned char *)malloc(FST_GZIO_LEN);
-#if defined(__wasi__)
-                fprintf(stderr,"gzdopen not supported on WASI build (1)\n");
-                exit (-1);
+#ifdef FST_GZIP_NO_DUP
+                fstWriterFseeko(xc, xc->hier_handle, 0, SEEK_SET);
+                fstGzipCopy(xc->handle, xc->hier_handle, xc->hier_file_len);
 #else
+                unsigned char *mem = (unsigned char *)malloc(FST_GZIO_LEN);
                 zfd = dup(fileno(xc->handle));
-#endif
                 fflush(xc->handle);
                 zhandle = gzdopen(zfd, "wb4");
                 if (zhandle) {
@@ -2047,6 +2261,7 @@ void fstWriterClose(fstWriterContext *xc)
                     close(zfd);
                 }
                 free(mem);
+#endif
             } else {
                 int lz4_maxlen;
                 unsigned char *mem;
@@ -2171,12 +2386,10 @@ void fstWriterClose(fstWriterContext *xc)
                     fflush(fp);
 
                     fstWriterFseeko(xc, xc->handle, 0, SEEK_SET);
-#if defined(__wasi__)
-                    fprintf(stderr,"gzdopen not supported on WASI build (1)\n");
-                    exit (-1);
+#ifdef FST_GZIP_NO_DUP
+                    fstGzipCopy(fp, xc->handle, uclen);
 #else
                     zfd = dup(fileno(fp));
-#endif
                     dsth = gzdopen(zfd, "wb4");
                     if (dsth) {
                         for (offpnt = 0; offpnt < uclen; offpnt += FST_GZIO_LEN) {
@@ -2189,6 +2402,7 @@ void fstWriterClose(fstWriterContext *xc)
                     } else {
                         close(zfd);
                     }
+#endif
                     fstWriterFseeko(xc, fp, 0, SEEK_END);
                     offpnt = ftello(fp);
                     fstWriterFseeko(xc, fp, 1, SEEK_SET);
@@ -3767,12 +3981,8 @@ static int fstReaderRecreateHierFile(struct fstReaderContext *xc)
 #ifndef __MINGW32__
             fflush(xc->f);
 #endif
-#if defined(__wasi__)
-            fprintf(stderr,"gzdopen not supported on WASI build (1)\n");
-            exit (-1);
-#else
+#ifndef FST_GZIP_NO_DUP
             zfd = dup(fileno(xc->f));
-#endif
             zhandle = gzdopen(zfd, "rb");
             if (!zhandle) {
                 close(zfd);
@@ -3780,6 +3990,7 @@ static int fstReaderRecreateHierFile(struct fstReaderContext *xc)
                 free(fnam);
                 return (0);
             }
+#endif
         } else if ((htyp == FST_BL_HIER_LZ4) || (htyp == FST_BL_HIER_LZ4DUO)) {
             fstReaderFseeko(xc, xc->f, xc->hier_pos - 8, SEEK_SET); /* get section len */
             clen = fstReaderUint64(xc->f) - 16;
@@ -3810,6 +4021,9 @@ static int fstReaderRecreateHierFile(struct fstReaderContext *xc)
 #endif
 
         if (htyp == FST_BL_HIER) {
+#ifdef FST_GZIP_NO_DUP
+            pass_status = fstGunzipCopy(xc->fh, xc->f, uclen);
+#else
             for (hl = 0; hl < uclen; hl += FST_GZIO_LEN) {
                 size_t len = ((uclen - hl) > FST_GZIO_LEN) ? FST_GZIO_LEN : (uclen - hl);
                 size_t gzreadlen = gzread(zhandle, mem, len); /* rc should equal len... */
@@ -3827,6 +4041,7 @@ static int fstReaderRecreateHierFile(struct fstReaderContext *xc)
                 }
             }
             gzclose(zhandle);
+#endif
         } else if (htyp == FST_BL_HIER_LZ4DUO) {
             unsigned char *lz4_cmem = (unsigned char *)malloc(clen);
             unsigned char *lz4_ucmem = (unsigned char *)malloc(uclen);
@@ -4529,12 +4744,10 @@ int fstReaderInit(struct fstReaderContext *xc)
         _lseek(fileno(xc->f), FST_ZWRAPPER_HDR_SIZE, SEEK_SET);
 #endif
 
-#if defined(__wasi__)
-        fprintf(stderr,"gzdopen not supported on WASI build (1)\n");
-        exit (-1);
+#ifdef FST_GZIP_NO_DUP
+        gzread_pass_status = fstGunzipCopy(fcomp, xc->f, uclen);
 #else
         zfd = dup(fileno(xc->f));
-#endif
         zhandle = gzdopen(zfd, "rb");
         if (zhandle) {
             for (offpnt = 0; offpnt < uclen; offpnt += FST_GZIO_LEN) {
@@ -4557,6 +4770,7 @@ int fstReaderInit(struct fstReaderContext *xc)
         } else {
             close(zfd);
         }
+#endif
         fflush(fcomp);
         fclose(xc->f);
         xc->f = fcomp;
