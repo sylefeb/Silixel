@@ -98,7 +98,7 @@ t_watch& add_watch(string signal, const map<string, int>& indices, vector<t_watc
   auto I = indices.find(signal);
   if (I == indices.end()) {
     fprintf(stderr, "<error> cannot find signal '%s' to watch\n", signal.c_str());
-    exit (-1);
+    exit(1);
   }
   t_watch w;
   w.name = signal;
@@ -179,7 +179,7 @@ int main(int argc,const char **argv)
     } else if (strcmp(argv[i], "--cycles") == 0) {
       if (i + 1 == argc) {
         fprintf(stderr, "--cycles expects a parameter (integer, number of cycles to simulate)\n");
-        exit(-1);
+        exit(1);
       }
       ++i;
       num_cycles = atoi(argv[i]);
@@ -187,7 +187,7 @@ int main(int argc,const char **argv)
     } else if (strcmp(argv[i], "--blif") == 0) {
       if (i + 1 == argc) {
         fprintf(stderr, "--blif expects a parameter (string, file to load)\n");
-        exit(-1);
+        exit(1);
       }
       ++i;
       blif_path = argv[i];
@@ -197,6 +197,7 @@ int main(int argc,const char **argv)
 
   if (blif_path[0] == 0) {
     fprintf(stderr, "no blif file on input (give one with --blif <filename>)\n");
+    exit(1);
   }
 
   /// checks
@@ -205,7 +206,7 @@ int main(int argc,const char **argv)
     fopen_s(&f, blif_path, "rb");
     if (f == NULL) {
       fprintf(stderr, "<error> cannot open input blif file %s\n", blif_path);
-      exit(-1);
+      exit(1);
     } else {
       fclose(f);
     }
@@ -274,7 +275,7 @@ int main(int argc,const char **argv)
   fstWriterContext *fst = fstWriterCreate("./trace.fst", 1);
   if (fst == NULL) {
     fprintf(stderr,"cannot open trace.fst for writing\n");
-    exit (-1);
+    exit(1);
   }
   fstWriterSetTimescale(fst, 1);
   fstWriterSetScope(fst, FST_ST_VCD_MODULE, "top", NULL);
