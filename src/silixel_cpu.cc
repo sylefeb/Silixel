@@ -131,6 +131,12 @@ void unsetFstScope(fstWriterContext *fst, string signal)
   }
 }
 
+// -----------------------------------------------------------------------------
+
+std::string lastId(std::string s)
+{
+  return s.substr(s.rfind('.') + 1);
+}
 
 // -----------------------------------------------------------------------------
 
@@ -244,10 +250,13 @@ int main(int argc,const char **argv)
   if (silice_design) {
     // selection specialized to a silice design
     for (auto signal : indices) {
-      if (signal.first.substr(0, 3) == "out") {
+      if (lastId(signal.first).substr(0, 4) == "out_") {
         auto &w = add_watch(signal.first, indices, watches);
         w.fst_type = FST_VT_VCD_WIRE;
-      } else if (signal.first.find("_q_") != std::string::npos) {
+      } else if (lastId(signal.first).substr(0, 3) == "in_") {
+        auto &w = add_watch(signal.first, indices, watches);
+        w.fst_type = FST_VT_VCD_WIRE;
+      } else if (lastId(signal.first).find("_q_") != std::string::npos) {
         auto &w = add_watch(signal.first, indices, watches);
         w.fst_type = FST_VT_VCD_REG;
       }
@@ -360,7 +369,7 @@ int main(int argc,const char **argv)
         added.insert(w.base_name);
         fstWriterEmitValueChange(fst, w.fst_handle, values[w.base_name].c_str());
         if (console_out && num_display < max_display) {
-          fprintf(stderr, "%-40s %s\n", w.base_name.c_str(), values[w.base_name].c_str());
+          fprintf(stderr, "%-40s %s (%s)\n", w.base_name.c_str(), values[w.base_name].c_str(),w.name.c_str());
           ++num_display;
         }
       }
