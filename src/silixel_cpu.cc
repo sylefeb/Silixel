@@ -320,7 +320,7 @@ int main(int argc,const char **argv)
     fstWriterEmitValueChange(fst, fst_clock, "1");
     simulPosEdge_cpu(luts, depths, (int)step_starts.size(), fanout, computelists, outputs);
 
-    int console_out = ev.expired();
+    int console_out = ev.expired() || (cycles == num_cycles-1);
 
     if (console_out) {
       LibSL::CppHelpers::Console::popCursor();
